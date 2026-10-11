@@ -1,0 +1,730 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------
+// ENUMS
+// -------------------------------------------------------------
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  STAFF
+}
+
+enum ModuleName {
+  DASHBOARD
+  CUSTOMERS
+  ORDERS
+  SALES
+  QUOTATIONS
+  PAYMENTS
+  CUSTOMER_LEDGER
+  INVENTORY
+  INVENTORY_OUTWARD
+  STOCK_TRANSFERS
+  FOLLOWUPS_TASKS
+  REPORTS
+  DOCUMENTS
+  USER_PERMISSIONS
+  COMPANY_CONFIG
+}
+
+enum ActionName {
+  VIEW
+  CREATE
+  EDIT
+  DELETE
+  APPROVE
+  REJECT
+  ASSIGN
+  REOPEN
+  CHANGE_PRICE
+  APPLY_DISCOUNT
+  APPROVE_EXCEPTION
+  CREATE_SALE
+  CONVERT_ORDER_TO_SALE
+  MANAGE_CUSTOMERS
+  RECORD_PAYMENT
+  VERIFY_PAYMENT
+  EDIT_PAYMENT
+  ALLOCATE_PAYMENT
+  REVERSE_PAYMENT
+  MANAGE_INVENTORY
+  CREATE_OUTWARD
+  TRANSFER_STOCK
+  APPROVE_DISCREPANCY
+  MANAGE_LOCATIONS
+  VIEW_REPORTS
+  VIEW_PROFIT_MARGINS
+  DOWNLOAD_DOCUMENTS
+  EXPORT_DATA
+}
+
+enum DataScope {
+  OWN
+  ASSIGNED
+  ALL
+}
+
+enum PermissionChangeType {
+  GRANT
+  MODIFY
+  REVOKE
+}
+
+enum CustomerType {
+  RETAIL
+  WHOLESALE
+  DISTRIBUTOR
+  CORPORATE
+  CUSTOM
+}
+
+enum StockMovementType {
+  INWARD
+  OUTWARD
+  TRANSFER_OUT
+  TRANSFER_IN
+  RETURN
+  ADJUSTMENT
+}
+
+enum TransferStatus {
+  DISPATCHED
+  COMPLETED
+  DISCREPANCY_REPORTED
+}
+
+// Order & Sales statuses marked as pending confirmation
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum SalePaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
+enum SaleApprovalStatus {
+  AUTO_APPROVED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CONVERTED
+}
+
+enum OutwardReconciliationStatus {
+  PENDING
+  RECONCILED
+  DISCREPANCY
+}
+
+enum OutwardDisposition {
+  SOLD
+  TRANSFERRED
+  RETURNED_TO_STOCK
+  CONSUMED
+  DAMAGED
+  OTHER
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+  CREDIT_UDHAAR
+  OTHER
+}
+
+enum PaymentVerificationStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+  REVERSED
+}
+
+enum LedgerEntryType {
+  SALE_INVOICE
+  PAYMENT_RECEIPT
+  CREDIT_NOTE
+  DEBIT_NOTE
+  REVERSAL
+  OPENING_BALANCE
+}
+
+enum FollowUpType {
+  CALL
+  WHATSAPP
+  MEETING
+  NOTE
+}
+
+enum FollowUpStatus {
+  PENDING
+  COMPLETED
+  SNOOZED
+  CANCELLED
+}
+
+// -------------------------------------------------------------
+// CORE USER & PERMISSIONS (GLOBAL PERMISSION ARCHITECTURE)
+// -------------------------------------------------------------
+
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         Role         @default(STAFF)
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  permissions         Permission[]
+  auditLogs           AuditLog[]
+  grantedPermissions  Permission[] @relation("GrantedBy")
+  permissionAuditsTarget PermissionAuditLog[] @relation("TargetUser")
+  permissionAuditsAuthor PermissionAuditLog[] @relation("ChangedByUser")
+
+  createdOrders       Order[]      @relation("OrderCreator")
+  assignedOrders      Order[]      @relation("OrderAssignee")
+  createdSales        Sale[]       @relation("SaleCreator")
+  createdOutwards     InventoryOutward[] @relation("OutwardResponsibleStaff")
+  assignedFollowUps   FollowUp[]   @relation("FollowUpAssignee")
+  createdFollowUps    FollowUp[]   @relation("FollowUpCreator")
+
+  @@index([email])
+  @@index([role])
+}
+
+model Permission {
+  id        String     @id @default(uuid())
+  userId    String
+  module    ModuleName
+  action    ActionName
+  scope     DataScope  @default(OWN)
+  grantedById String
+  grantedAt DateTime   @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy User       @relation("GrantedBy", fields: [grantedById], references: [id])
+
+  @@unique([userId, module, action])
+  @@index([userId])
+}
+
+model PermissionAuditLog {
+  id            String               @id @default(uuid())
+  targetUserId  String
+  changedById   String
+  module        ModuleName
+  action        ActionName
+  previousScope DataScope?
+  newScope      DataScope?
+  changeType    PermissionChangeType
+  reason        String
+  createdAt     DateTime             @default(now())
+
+  targetUser    User                 @relation("TargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
+  changedByUser User                 @relation("ChangedByUser", fields: [changedById], references: [id])
+
+  @@index([targetUserId])
+  @@index([changedById])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String?
+  action       String
+  entityType   String
+  entityId     String?
+  previousState Json?
+  newState     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// -------------------------------------------------------------
+// CUSTOMERS & PRICING
+// -------------------------------------------------------------
+
+model Customer {
+  id              String             @id @default(uuid())
+  customerCode    String             @unique
+  name            String
+  phone           String             @unique
+  email           String?
+  billingAddress  String?
+  deliveryAddress String?
+  customerType    CustomerType       @default(RETAIL)
+  gstin           String?
+  priceListId     String?
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  priceList       CustomerPriceList? @relation(fields: [priceListId], references: [id], onDelete: SetNull)
+  orders          Order[]
+  sales           Sale[]
+  quotations      Quotation[]
+  payments        Payment[]
+  ledgerEntries   CustomerLedger[]
+  followUps       FollowUp[]
+
+  @@index([phone])
+  @@index([name])
+}
+
+model CustomerPriceList {
+  id                 String          @id @default(uuid())
+  name               String          @unique
+  description        String?
+  discountPercentage Decimal         @default(0)
+  isDefault          Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  customers          Customer[]
+  productPrices      ProductPrice[]
+}
+
+// -------------------------------------------------------------
+// PRODUCTS & MULTI-LOCATION INVENTORY
+// -------------------------------------------------------------
+
+model Product {
+  id            String          @id @default(uuid())
+  sku           String          @unique
+  name          String
+  description   String?
+  unit          String          @default("pcs")
+  category      String
+  basePrice     Decimal
+  taxRate       Decimal         @default(18.0)
+  minStockAlert Int             @default(10)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  prices        ProductPrice[]
+  stockBalances StockBalance[]
+  stockMovements StockMovement[]
+  stockTransfers StockTransfer[]
+  orderItems    OrderItem[]
+  saleItems     SaleItem[]
+  quotationItems QuotationItem[]
+  outwardEntries InventoryOutward[]
+
+  @@index([sku])
+  @@index([category])
+}
+
+model ProductPrice {
+  id          String            @id @default(uuid())
+  priceListId String
+  productId   String
+  customPrice Decimal
+
+  priceList   CustomerPriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  product     Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([priceListId, productId])
+}
+
+model Location {
+  id         String         @id @default(uuid())
+  name       String         @unique
+  code       String         @unique
+  address    String?
+  isDefault  Boolean        @default(false)
+  isActive   Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  stockBalances    StockBalance[]
+  stockMovements   StockMovement[]
+  outwardEntries   InventoryOutward[]
+  sourceTransfers  StockTransfer[] @relation("SourceLocation")
+  destTransfers    StockTransfer[] @relation("DestLocation")
+}
+
+model StockBalance {
+  id         String   @id @default(uuid())
+  locationId String
+  productId  String
+  quantity   Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([locationId, productId])
+}
+
+model StockMovement {
+  id            String            @id @default(uuid())
+  movementType  StockMovementType
+  productId     String
+  locationId    String
+  quantity      Int
+  balanceAfter  Int
+  referenceType String
+  referenceId   String?
+  performedById String
+  reason        String?
+  createdAt     DateTime          @default(now())
+
+  product       Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  location      Location          @relation(fields: [locationId], references: [id], onDelete: Restrict)
+
+  @@index([productId, locationId])
+  @@index([createdAt])
+}
+
+model StockTransfer {
+  id                    String         @id @default(uuid())
+  transferNumber        String         @unique
+  sourceLocationId      String
+  destinationLocationId String
+  productId             String
+  quantity              Int
+  status                TransferStatus @default(DISPATCHED)
+  senderId              String
+  receiverId            String?
+  notes                 String?
+  createdAt             DateTime       @default(now())
+
+  sourceLocation        Location       @relation("SourceLocation", fields: [sourceLocationId], references: [id], onDelete: Restrict)
+  destinationLocation   Location       @relation("DestLocation", fields: [destinationLocationId], references: [id], onDelete: Restrict)
+  product               Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([transferNumber])
+}
+
+// -------------------------------------------------------------
+// ORDERS & SEPARATE SALES (MANDATORY SEPARATION)
+// -------------------------------------------------------------
+
+model Order {
+  id                   String      @id @default(uuid())
+  orderNumber          String      @unique
+  customerId           String
+  orderDate            DateTime    @default(now())
+  expectedDeliveryDate DateTime?
+  subtotal             Decimal
+  discount             Decimal     @default(0)
+  tax                  Decimal     @default(0)
+  deliveryCharges      Decimal     @default(0)
+  grandTotal           Decimal
+  status               OrderStatus @default(PENDING)
+  createdById          String
+  assignedToId         String?
+  notes                String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  customer             Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdBy            User        @relation("OrderCreator", fields: [createdById], references: [id])
+  assignedTo           User?       @relation("OrderAssignee", fields: [assignedToId], references: [id])
+  items                OrderItem[]
+  resultingSale        Sale?
+
+  @@index([orderNumber])
+  @@index([customerId])
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  unitPrice Decimal
+  discount  Decimal  @default(0)
+  taxRate   Decimal  @default(18.0)
+  lineTotal Decimal
+
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+}
+
+model Sale {
+  id              String             @id @default(uuid())
+  invoiceNumber   String             @unique
+  orderId         String?            @unique // Exactly 1-to-1 optional link prevents duplicate sales
+  customerId      String
+  saleDate        DateTime           @default(now())
+  subtotal        Decimal
+  discount        Decimal            @default(0)
+  tax             Decimal            @default(0)
+  deliveryCharges Decimal            @default(0)
+  grandTotal      Decimal
+  paidAmount      Decimal            @default(0)
+  balanceAmount   Decimal
+  paymentStatus   SalePaymentStatus  @default(UNPAID)
+  approvalStatus  SaleApprovalStatus @default(AUTO_APPROVED)
+  approvedById    String?
+  overrideReason  String?
+  createdById     String
+  notes           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  customer        Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  linkedOrder     Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdBy       User               @relation("SaleCreator", fields: [createdById], references: [id])
+  items           SaleItem[]
+  allocations     PaymentAllocation[]
+  linkedOutwards  InventoryOutward[]
+
+  @@index([invoiceNumber])
+  @@index([customerId])
+}
+
+model SaleItem {
+  id        String   @id @default(uuid())
+  saleId    String
+  productId String
+  quantity  Int
+  unitPrice Decimal
+  discount  Decimal  @default(0)
+  taxRate   Decimal  @default(18.0)
+  lineTotal Decimal
+
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+}
+
+model Quotation {
+  id              String          @id @default(uuid())
+  quotationNumber String          @unique
+  customerId      String
+  quotationDate   DateTime        @default(now())
+  validUntil      DateTime
+  subtotal        Decimal
+  discount        Decimal         @default(0)
+  tax             Decimal         @default(0)
+  deliveryCharges Decimal         @default(0)
+  grandTotal      Decimal
+  status          QuotationStatus @default(DRAFT)
+  convertedSaleId String?
+  createdById     String
+  notes           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  customer        Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items           QuotationItem[]
+
+  @@index([quotationNumber])
+}
+
+model QuotationItem {
+  id          String    @id @default(uuid())
+  quotationId String
+  productId   String
+  quantity    Int
+  unitPrice   Decimal
+  lineTotal   Decimal
+
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+}
+
+// -------------------------------------------------------------
+// INVENTORY OUTWARD & RECONCILIATION
+// -------------------------------------------------------------
+
+model InventoryOutward {
+  id                   String                      @id @default(uuid())
+  outwardNumber        String                      @unique
+  productId            String
+  quantity             Int
+  takenBy              String
+  sourceLocationId     String
+  purpose              String // Free-text as requested
+  responsibleStaffId   String
+  linkedSaleId         String? // Optional link to Sale (NEVER double-deducts)
+  reconciliationStatus OutwardReconciliationStatus @default(PENDING)
+  hasDiscrepancy       Boolean                     @default(false)
+  discrepancyReason    String?
+  approvedById         String?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  product              Product                     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  sourceLocation       Location                    @relation(fields: [sourceLocationId], references: [id], onDelete: Restrict)
+  responsibleStaff     User                        @relation("OutwardResponsibleStaff", fields: [responsibleStaffId], references: [id])
+  linkedSale           Sale?                       @relation(fields: [linkedSaleId], references: [id], onDelete: SetNull)
+  reconciliations      OutwardReconciliation[]
+
+  @@index([outwardNumber])
+  @@index([productId])
+  @@index([reconciliationStatus])
+}
+
+model OutwardReconciliation {
+  id           String              @id @default(uuid())
+  outwardId    String
+  disposition  OutwardDisposition
+  quantity     Int
+  linkedSaleId String?
+  notes        String?
+  createdById  String
+  createdAt    DateTime            @default(now())
+
+  outward      InventoryOutward    @relation(fields: [outwardId], references: [id], onDelete: Cascade)
+
+  @@index([outwardId])
+}
+
+// -------------------------------------------------------------
+// PAYMENTS & CUSTOMER LEDGER
+// -------------------------------------------------------------
+
+model Payment {
+  id                 String                    @id @default(uuid())
+  paymentReference   String                    @unique
+  customerId         String
+  paymentMethod      PaymentMethod
+  amount             Decimal
+  paymentDate        DateTime                  @default(now())
+  verificationStatus PaymentVerificationStatus @default(PENDING_VERIFICATION)
+  verifiedById       String?
+  verifiedAt         DateTime?
+  transactionDetails String?
+  notes              String?
+  createdById        String
+  createdAt          DateTime                  @default(now())
+
+  customer           Customer                  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  allocations        PaymentAllocation[]
+
+  @@index([paymentReference])
+  @@index([customerId])
+  @@index([verificationStatus])
+}
+
+model PaymentAllocation {
+  id              String   @id @default(uuid())
+  paymentId       String
+  saleId          String
+  allocatedAmount Decimal
+  createdAt       DateTime @default(now())
+
+  payment         Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  sale            Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([saleId])
+}
+
+model CustomerLedger {
+  id              String          @id @default(uuid())
+  customerId      String
+  entryType       LedgerEntryType
+  referenceId     String?
+  referenceNumber String
+  debit           Decimal         @default(0)
+  credit          Decimal         @default(0)
+  balance         Decimal
+  description     String
+  createdById     String
+  createdAt       DateTime        @default(now())
+
+  customer        Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+// -------------------------------------------------------------
+// FOLLOW-UPS, DOCUMENTS & COMPANY CONFIGURATION
+// -------------------------------------------------------------
+
+model FollowUp {
+  id            String         @id @default(uuid())
+  customerId    String
+  type          FollowUpType   @default(CALL)
+  scheduledDate DateTime
+  status        FollowUpStatus @default(PENDING)
+  outcome       String?
+  assignedToId  String
+  createdById   String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignedTo    User           @relation("FollowUpAssignee", fields: [assignedToId], references: [id])
+  createdBy     User           @relation("FollowUpCreator", fields: [createdById], references: [id])
+
+  @@index([customerId])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+model Document {
+  id           String   @id @default(uuid())
+  entityType   String
+  entityId     String
+  documentType String
+  fileUrl      String
+  fileName     String
+  fileSize     Int
+  uploadedById String
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+model CompanyConfig {
+  id                 String   @id @default("default")
+  companyName        String   @default("AEVAN Cleaning")
+  brandName          String   @default("GOOD TOUCH")
+  gstin              String?
+  phone              String   @default("+91-7061101285")
+  email              String   @default("info@aevancleaning.com")
+  address            String   @default("Bihar Sharif, Nalanda, Bihar")
+  logoUrl            String?
+  invoicePrefix      String   @default("INV-")
+  nextInvoiceNumber  Int      @default(1001)
+  orderPrefix        String   @default("ORD-")
+  nextOrderNumber    Int      @default(1001)
+  outwardPrefix      String   @default("OUT-")
+  nextOutwardNumber  Int      @default(1001)
+  paymentPrefix      String   @default("PAY-")
+  nextPaymentNumber  Int      @default(1001)
+  currency           String   @default("INR")
+  termsAndConditions String?
+  deliveryRules      Json?
+  updatedAt          DateTime @updatedAt
+}

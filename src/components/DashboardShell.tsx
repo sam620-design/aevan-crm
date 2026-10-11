@@ -1,0 +1,356 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Users,
+  ShoppingCart,
+  Receipt,
+  FileText,
+  CreditCard,
+  BookOpen,
+  Package,
+  PackageMinus,
+  ArrowLeftRight,
+  CalendarCheck,
+  BarChart3,
+  FolderArchive,
+  ShieldAlert,
+  Settings,
+  LogOut,
+  Building2,
+  Menu,
+  X,
+  ChevronRight,
+} from "lucide-react";
+import { SessionUser } from "@/lib/auth";
+
+export default function DashboardShell({
+  user,
+  children,
+}: {
+  user: SessionUser;
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isSuper = user.role === "SUPERADMIN";
+
+  const navItems = [
+    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { label: "Customers", href: "/dashboard/customers", icon: Users },
+    { label: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
+    { label: "Sales", href: "/dashboard/sales", icon: Receipt },
+    { label: "Quotations", href: "/dashboard/quotations", icon: FileText },
+    { label: "Payments", href: "/dashboard/payments", icon: CreditCard },
+    { label: "Customer Ledger", href: "/dashboard/ledger", icon: BookOpen },
+    { label: "Inventory", href: "/dashboard/inventory", icon: Package },
+    { label: "Inventory Outward", href: "/dashboard/outward", icon: PackageMinus },
+    { label: "Stock Transfers", href: "/dashboard/transfers", icon: ArrowLeftRight },
+    { label: "Follow-ups & Tasks", href: "/dashboard/followups", icon: CalendarCheck },
+    { label: "Reports", href: "/dashboard/reports", icon: BarChart3 },
+    { label: "Documents", href: "/dashboard/documents", icon: FolderArchive },
+    {
+      label: "Permissions & Users",
+      href: "/dashboard/permissions",
+      icon: ShieldAlert,
+      badge: isSuper ? "Root" : "Restricted",
+    },
+    { label: "CRM Configuration", href: "/dashboard/settings", icon: Settings },
+  ];
+
+  return (
+    <div className="min-h-screen flex flex-col md:flex-row bg-slate-100 text-slate-800">
+      {/* ------------------------------------------------------------- */}
+      {/* 1. MOBILE TOP APP BAR (Phones only) */}
+      {/* ------------------------------------------------------------- */}
+      <header className="sticky top-0 z-40 h-16 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between md:hidden shadow-md shrink-0">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="p-2 -ml-1 text-slate-300 hover:text-white rounded-xl active:bg-slate-800 transition-colors"
+            aria-label="Open menu"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-brand-800 flex items-center justify-center text-brand-300 font-bold border border-brand-500/30">
+              <Building2 className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-bold text-white text-sm leading-tight">AEVAN CRM</p>
+              <p className="text-[10px] text-brand-400 font-medium">GOOD TOUCH</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span
+            className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
+              user.role === "SUPERADMIN"
+                ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
+                : user.role === "ADMIN"
+                ? "bg-blue-950 text-blue-300 border border-blue-800"
+                : "bg-slate-800 text-slate-300"
+            }`}
+          >
+            {user.role}
+          </span>
+        </div>
+      </header>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 2. MOBILE SLIDE-OUT DRAWER / SHEET */}
+      {/* ------------------------------------------------------------- */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm transition-opacity"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+
+          {/* Drawer Content */}
+          <div className="relative w-4/5 max-w-xs bg-slate-900 text-slate-300 flex flex-col h-full shadow-2xl z-10">
+            {/* Drawer Header */}
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-brand-800 flex items-center justify-center text-brand-300 font-bold border border-brand-500/30">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">AEVAN Cleaning</h3>
+                  <p className="text-[10px] text-brand-400">All 15 Modules</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white active:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* User Profile in Drawer */}
+            <div className="px-4 py-3 bg-slate-950/60 border-b border-slate-800/80">
+              <p className="text-xs font-semibold text-white truncate">{user.name}</p>
+              <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
+            </div>
+
+            {/* Drawer Nav Links */}
+            <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+              {navItems.map((item, index) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center justify-between px-3 py-3 rounded-xl text-xs font-medium transition-colors ${
+                      isActive
+                        ? "bg-brand-900/60 text-white font-semibold border border-brand-700/50"
+                        : "text-slate-300 hover:text-white active:bg-slate-800"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className="w-4 h-4 text-slate-400" />
+                      <span>
+                        {index + 1}. {item.label}
+                      </span>
+                    </div>
+                    {item.badge ? (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-brand-950 text-brand-300 border border-brand-800">
+                        {item.badge}
+                      </span>
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* Logout in Drawer */}
+            <div className="p-3 border-t border-slate-800">
+              <form action="/api/auth/logout" method="POST">
+                <button
+                  type="submit"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-medium text-red-400 bg-red-950/30 border border-red-900/40 active:bg-red-950/60"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 3. DESKTOP SIDEBAR (Hidden on Phones) */}
+      {/* ------------------------------------------------------------- */}
+      <aside className="hidden md:flex w-64 lg:w-72 bg-slate-900 border-r border-slate-800 flex-col shrink-0 text-slate-300">
+        <div className="p-5 border-b border-slate-800 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-brand-800 flex items-center justify-center text-brand-300 shrink-0 font-bold border border-brand-500/30">
+            <Building2 className="w-5 h-5" />
+          </div>
+          <div className="overflow-hidden">
+            <h2 className="font-bold text-white text-base leading-tight tracking-tight">
+              AEVAN Cleaning
+            </h2>
+            <p className="text-xs text-brand-400 font-medium">GOOD TOUCH Formulations</p>
+          </div>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+          {navItems.map((item, index) => {
+            const Icon = item.icon;
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-colors group ${
+                  isActive
+                    ? "bg-brand-900/60 text-white font-semibold border border-brand-700/50"
+                    : "text-slate-300 hover:text-white hover:bg-slate-800/80"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Icon className="w-4 h-4 text-slate-400 group-hover:text-brand-400 transition-colors" />
+                  <span>
+                    {index + 1}. {item.label}
+                  </span>
+                </div>
+                {item.badge && (
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                      isSuper
+                        ? "bg-brand-900/80 text-brand-300 border border-brand-700/50"
+                        : "bg-slate-800 text-slate-400"
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="p-4 border-t border-slate-800 bg-slate-950/50">
+          <div className="flex items-center justify-between mb-3">
+            <div className="overflow-hidden">
+              <p className="text-sm font-semibold text-white truncate">{user.name}</p>
+              <p className="text-xs text-slate-400 truncate">{user.email}</p>
+            </div>
+            <span
+              className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
+                user.role === "SUPERADMIN"
+                  ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
+                  : user.role === "ADMIN"
+                  ? "bg-blue-950 text-blue-300 border border-blue-800"
+                  : "bg-slate-800 text-slate-300"
+              }`}
+            >
+              {user.role}
+            </span>
+          </div>
+
+          <form action="/api/auth/logout" method="POST">
+            <button
+              type="submit"
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-medium text-slate-400 hover:text-red-300 hover:bg-red-950/40 border border-slate-800 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 4. MAIN CONTENT AREA */}
+      {/* ------------------------------------------------------------- */}
+      <div className="flex-1 flex flex-col min-w-0 pb-20 md:pb-8">
+        {/* Desktop Header Bar */}
+        <header className="hidden md:flex h-16 bg-white border-b border-slate-200 px-8 items-center justify-between shrink-0 shadow-sm">
+          <div>
+            <h1 className="text-lg font-bold text-slate-900">
+              Enterprise CRM & Inventory Engine
+            </h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-xs text-slate-500">Security Access Level</p>
+              <p className="text-xs font-bold text-brand-800 uppercase tracking-wide">
+                {user.role === "SUPERADMIN"
+                  ? "Root Superadmin (Full Policy Control)"
+                  : `${user.role} (Explicit Permissions Only)`}
+              </p>
+            </div>
+          </div>
+        </header>
+
+        {/* Dynamic Page Content */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">{children}</main>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 5. MOBILE BOTTOM THUMB NAVIGATION (Phones only) */}
+      {/* ------------------------------------------------------------- */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 h-16 bg-slate-900 border-t border-slate-800 flex items-center justify-around md:hidden px-2 shadow-2xl">
+        <Link
+          href="/dashboard"
+          className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
+            pathname === "/dashboard" ? "text-brand-400 font-bold" : "text-slate-400"
+          }`}
+        >
+          <LayoutDashboard className="w-5 h-5 mb-0.5" />
+          <span>Home</span>
+        </Link>
+
+        <Link
+          href="/dashboard/sales"
+          className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
+            pathname === "/dashboard/sales" ? "text-brand-400 font-bold" : "text-slate-400"
+          }`}
+        >
+          <Receipt className="w-5 h-5 mb-0.5" />
+          <span>Sales</span>
+        </Link>
+
+        <Link
+          href="/dashboard/outward"
+          className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
+            pathname === "/dashboard/outward" ? "text-brand-400 font-bold" : "text-slate-400"
+          }`}
+        >
+          <PackageMinus className="w-5 h-5 mb-0.5" />
+          <span>Outward</span>
+        </Link>
+
+        <Link
+          href="/dashboard/customers"
+          className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
+            pathname === "/dashboard/customers" ? "text-brand-400 font-bold" : "text-slate-400"
+          }`}
+        >
+          <Users className="w-5 h-5 mb-0.5" />
+          <span>Clients</span>
+        </Link>
+
+        <button
+          onClick={() => setMobileMenuOpen(true)}
+          className="flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium text-slate-400 active:text-brand-400"
+        >
+          <Menu className="w-5 h-5 mb-0.5" />
+          <span>More</span>
+        </button>
+      </nav>
+    </div>
+  );
+}
