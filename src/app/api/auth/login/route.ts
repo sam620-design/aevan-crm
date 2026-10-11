@@ -45,10 +45,10 @@ export async function POST(request: Request) {
         }
       }
     } catch {
-      // If local DB is not yet running, allow bootstrap login for testing UI
+      // Local DB offline fallback for UI testability
     }
 
-    // Secure bootstrap credentials check
+    // 1. Superadmin Root Credentials
     if (!sessionUser && cleanEmail === bootstrapEmail && password === bootstrapPassword) {
       sessionUser = {
         id: "superadmin-root-id",
@@ -58,9 +58,29 @@ export async function POST(request: Request) {
       };
     }
 
+    // 2. Admin Credentials (Explicit Permissions Policy)
+    if (!sessionUser && cleanEmail === "admin@aevancleaning.com" && (password === "AevanAdmin@2026" || password === bootstrapPassword)) {
+      sessionUser = {
+        id: "demo-admin-1",
+        email: "admin@aevancleaning.com",
+        name: "Priya Sharma (Operations Admin)",
+        role: "ADMIN",
+      };
+    }
+
+    // 3. Staff Credentials (Zero Implicit Permissions)
+    if (!sessionUser && cleanEmail === "staff@aevancleaning.com" && (password === "AevanStaff@2026" || password === bootstrapPassword)) {
+      sessionUser = {
+        id: "demo-staff-1",
+        email: "staff@aevancleaning.com",
+        name: "Rahul Kumar (Field Staff)",
+        role: "STAFF",
+      };
+    }
+
     if (!sessionUser) {
       return NextResponse.json(
-        { error: "Invalid credentials. Please verify your email and password." },
+        { error: "Invalid email or password. Please verify your credentials." },
         { status: 401 }
       );
     }
