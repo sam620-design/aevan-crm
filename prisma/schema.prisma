@@ -20,6 +20,7 @@ enum Role {
 enum ModuleName {
   DASHBOARD
   CUSTOMERS
+  PRICE_LISTS
   ORDERS
   SALES
   QUOTATIONS
@@ -207,6 +208,9 @@ model User {
   permissionAuditsTarget PermissionAuditLog[] @relation("TargetUser")
   permissionAuditsAuthor PermissionAuditLog[] @relation("ChangedByUser")
 
+  createdCustomers    Customer[]   @relation("CustomerCreator")
+  assignedCustomers   Customer[]   @relation("CustomerAssignee")
+
   createdOrders       Order[]      @relation("OrderCreator")
   assignedOrders      Order[]      @relation("OrderAssignee")
   createdSales        Sale[]       @relation("SaleCreator")
@@ -280,19 +284,27 @@ model AuditLog {
 model Customer {
   id              String             @id @default(uuid())
   customerCode    String             @unique
-  name            String
-  phone           String             @unique
-  email           String?
+  name            String             // Business or Customer Name
+  contactPerson   String?            // Primary Contact Person
+  phone           String             // Non-unique: allows legitimate shared business contacts
+  email           String?            // Optional email
   billingAddress  String?
-  deliveryAddress String?
+  shippingAddress String?
+  deliveryAddress String?            // Alias / legacy compatibility
   customerType    CustomerType       @default(RETAIL)
-  gstin           String?
+  gstin           String?            // Optional GSTIN format validated in app
+  notes           String?
   priceListId     String?
+  assignedToId    String?            // Data scope: ASSIGNED
+  createdById     String?            // Data scope: OWN
   isActive        Boolean            @default(true)
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
   priceList       CustomerPriceList? @relation(fields: [priceListId], references: [id], onDelete: SetNull)
+  assignedTo      User?              @relation("CustomerAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy       User?              @relation("CustomerCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
   orders          Order[]
   sales           Sale[]
   quotations      Quotation[]
@@ -302,11 +314,14 @@ model Customer {
 
   @@index([phone])
   @@index([name])
+  @@index([assignedToId])
+  @@index([createdById])
 }
 
 model CustomerPriceList {
   id                 String          @id @default(uuid())
   name               String          @unique
+  type               CustomerType    @default(RETAIL)
   description        String?
   discountPercentage Decimal         @default(0)
   isDefault          Boolean         @default(false)
@@ -324,11 +339,13 @@ model CustomerPriceList {
 model Product {
   id            String          @id @default(uuid())
   sku           String          @unique
+  barcode       String?         @unique
   name          String
   description   String?
   unit          String          @default("pcs")
   category      String
   basePrice     Decimal
+  costPrice     Decimal?        // Guarded: visible only with VIEW_PROFIT_MARGINS
   taxRate       Decimal         @default(18.0)
   minStockAlert Int             @default(10)
   isActive      Boolean         @default(true)
@@ -346,6 +363,7 @@ model Product {
 
   @@index([sku])
   @@index([category])
+  @@index([barcode])
 }
 
 model ProductPrice {
@@ -395,10 +413,10 @@ model StockMovement {
   movementType  StockMovementType
   productId     String
   locationId    String
-  quantity      Int
-  balanceAfter  Int
+  quantity      Int               // Positive for addition, negative for deduction
+  balanceAfter  Int               // Must never be negative
   referenceType String
-  referenceId   String?
+  referenceId   String?           // e.g. TRF-1001, INW-1001
   performedById String
   reason        String?
   createdAt     DateTime          @default(now())
@@ -408,6 +426,7 @@ model StockMovement {
 
   @@index([productId, locationId])
   @@index([createdAt])
+  @@index([referenceId])
 }
 
 model StockTransfer {
@@ -417,7 +436,7 @@ model StockTransfer {
   destinationLocationId String
   productId             String
   quantity              Int
-  status                TransferStatus @default(DISPATCHED)
+  status                TransferStatus @default(COMPLETED)
   senderId              String
   receiverId            String?
   notes                 String?
@@ -479,7 +498,7 @@ model OrderItem {
 model Sale {
   id              String             @id @default(uuid())
   invoiceNumber   String             @unique
-  orderId         String?            @unique // Exactly 1-to-1 optional link prevents duplicate sales
+  orderId         String?            @unique
   customerId      String
   saleDate        DateTime           @default(now())
   subtotal        Decimal
@@ -570,9 +589,9 @@ model InventoryOutward {
   quantity             Int
   takenBy              String
   sourceLocationId     String
-  purpose              String // Free-text as requested
+  purpose              String
   responsibleStaffId   String
-  linkedSaleId         String? // Optional link to Sale (NEVER double-deducts)
+  linkedSaleId         String?
   reconciliationStatus OutwardReconciliationStatus @default(PENDING)
   hasDiscrepancy       Boolean                     @default(false)
   discrepancyReason    String?
