@@ -66,6 +66,7 @@ enum ActionName {
   DOWNLOAD_DOCUMENTS
   EXPORT_DATA
   CLOSE
+  CONVERT_TO_SALE
 }
 
 enum DataScope {
@@ -225,6 +226,8 @@ model User {
   createdOrders       Order[]      @relation("OrderCreator")
   assignedOrders      Order[]      @relation("OrderAssignee")
   createdSales        Sale[]       @relation("SaleCreator")
+  finalizedSales      Sale[]       @relation("SaleFinalizer")
+  createdQuotations   Quotation[]  @relation("QuotationCreator")
   createdOutwards     InventoryOutward[] @relation("OutwardResponsibleStaff")
   dispatchedOutwards  InventoryOutward[] @relation("OutwardDispatcher")
   closedOutwards      InventoryOutward[] @relation("OutwardCloser")
@@ -478,8 +481,10 @@ model Order {
   id                   String      @id @default(uuid())
   orderNumber          String      @unique
   customerId           String
+  customerName         String?
   orderDate            DateTime    @default(now())
   expectedDeliveryDate DateTime?
+  deliveryAddress      String?
   subtotal             Decimal
   discount             Decimal     @default(0)
   tax                  Decimal     @default(0)
@@ -500,27 +505,37 @@ model Order {
 
   @@index([orderNumber])
   @@index([customerId])
+  @@index([status])
 }
 
 model OrderItem {
-  id        String   @id @default(uuid())
-  orderId   String
-  productId String
-  quantity  Int
-  unitPrice Decimal
-  discount  Decimal  @default(0)
-  taxRate   Decimal  @default(18.0)
-  lineTotal Decimal
+  id          String   @id @default(uuid())
+  orderId     String
+  productId   String
+  productName String?
+  sku         String?
+  unit        String?  @default("pcs")
+  quantity    Int
+  unitPrice   Decimal
+  discount    Decimal  @default(0)
+  taxRate     Decimal  @default(18.0)
+  lineTotal   Decimal
 
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
 }
 
 model Sale {
   id              String             @id @default(uuid())
-  invoiceNumber   String             @unique
+  saleNumber      String             @unique
+  invoiceNumber   String?            @unique
   orderId         String?            @unique
+  quotationId     String?            @unique
   customerId      String
+  customerName    String?
+  customerGstin   String?
+  billingAddress  String?
+  shippingAddress String?
   saleDate        DateTime           @default(now())
   subtotal        Decimal
   discount        Decimal            @default(0)
@@ -529,6 +544,9 @@ model Sale {
   grandTotal      Decimal
   paidAmount      Decimal            @default(0)
   balanceAmount   Decimal
+  isFinalized     Boolean            @default(false)
+  finalizedAt     DateTime?
+  finalizedById   String?
   paymentStatus   SalePaymentStatus  @default(UNPAID)
   approvalStatus  SaleApprovalStatus @default(AUTO_APPROVED)
   approvedById    String?
@@ -540,34 +558,43 @@ model Sale {
 
   customer        Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
   linkedOrder     Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  linkedQuotation Quotation?         @relation("QuotationResultingSale", fields: [quotationId], references: [id], onDelete: SetNull)
   createdBy       User               @relation("SaleCreator", fields: [createdById], references: [id])
+  finalizedBy     User?              @relation("SaleFinalizer", fields: [finalizedById], references: [id])
   items           SaleItem[]
   allocations     PaymentAllocation[]
   linkedOutwards  InventoryOutward[]
   linkedReconciliations OutwardReconciliation[]
 
+  @@index([saleNumber])
   @@index([invoiceNumber])
   @@index([customerId])
+  @@index([isFinalized])
 }
 
 model SaleItem {
-  id        String   @id @default(uuid())
-  saleId    String
-  productId String
-  quantity  Int
-  unitPrice Decimal
-  discount  Decimal  @default(0)
-  taxRate   Decimal  @default(18.0)
-  lineTotal Decimal
+  id          String   @id @default(uuid())
+  saleId      String
+  productId   String
+  productName String?
+  sku         String?
+  unit        String?  @default("pcs")
+  quantity    Int
+  unitPrice   Decimal
+  discount    Decimal  @default(0)
+  taxRate     Decimal  @default(18.0)
+  lineTotal   Decimal
+  costPrice   Decimal?
 
-  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
 }
 
 model Quotation {
   id              String          @id @default(uuid())
   quotationNumber String          @unique
   customerId      String
+  customerName    String?
   quotationDate   DateTime        @default(now())
   validUntil      DateTime
   subtotal        Decimal
@@ -576,24 +603,40 @@ model Quotation {
   deliveryCharges Decimal         @default(0)
   grandTotal      Decimal
   status          QuotationStatus @default(DRAFT)
-  convertedSaleId String?
+  convertedSaleId String?         @unique
   createdById     String
   notes           String?
+  issuedAt        DateTime?
+  acceptedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  reopenedAt      DateTime?
+  reopenedById    String?
+  reopenReason    String?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
   customer        Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdBy       User            @relation("QuotationCreator", fields: [createdById], references: [id])
   items           QuotationItem[]
+  resultingSale   Sale?           @relation("QuotationResultingSale")
 
   @@index([quotationNumber])
+  @@index([customerId])
+  @@index([status])
 }
 
 model QuotationItem {
   id          String    @id @default(uuid())
   quotationId String
   productId   String
+  productName String?
+  sku         String?
+  unit        String?   @default("pcs")
   quantity    Int
   unitPrice   Decimal
+  discount    Decimal   @default(0)
+  taxRate     Decimal   @default(18.0)
   lineTotal   Decimal
 
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
@@ -842,6 +885,10 @@ model CompanyConfig {
   nextInvoiceNumber  Int      @default(1001)
   orderPrefix        String   @default("ORD-")
   nextOrderNumber    Int      @default(1001)
+  salePrefix         String   @default("SAL-")
+  nextSaleNumber     Int      @default(1001)
+  quotationPrefix    String   @default("QUO-")
+  nextQuotationNumber Int     @default(1001)
   outwardPrefix      String   @default("OUT-")
   nextOutwardNumber  Int      @default(1001)
   paymentPrefix      String   @default("PAY-")
