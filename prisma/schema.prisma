@@ -27,6 +27,15 @@ enum ModuleName {
   PAYMENTS
   CUSTOMER_LEDGER
   RECEIVABLES
+  SUPPLIERS
+  PURCHASE_ORDERS
+  GOODS_RECEIPTS
+  SUPPLIER_BILLS
+  PURCHASE_RETURNS
+  SUPPLIER_PAYMENTS
+  SUPPLIER_LEDGER
+  ACCOUNTS_PAYABLE
+  EXPENSES
   INVENTORY
   INVENTORY_OUTWARD
   STOCK_TRANSFERS
@@ -75,6 +84,9 @@ enum ActionName {
   APPLY_ADVANCE
   REVERSE
   PRINT
+  SUBMIT
+  CANCEL
+  DEACTIVATE
 }
 
 enum DataScope {
@@ -234,6 +246,61 @@ enum FollowUpStatus {
   CANCELLED
 }
 
+enum PurchaseOrderStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+  CLOSED
+}
+
+enum GoodsReceiptStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+enum SupplierBillStatus {
+  DRAFT
+  POSTED
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+enum PurchaseReturnStatus {
+  DRAFT
+  APPROVED
+  POSTED
+  CANCELLED
+}
+
+enum SupplierPaymentStatus {
+  POSTED
+  REVERSED
+}
+
+enum SupplierLedgerEntryType {
+  PURCHASE_BILL
+  SUPPLIER_PAYMENT
+  PAYMENT_REVERSAL
+  PURCHASE_RETURN
+  SUPPLIER_CREDIT_NOTE
+  OPENING_BALANCE
+  AUTHORIZED_ADJUSTMENT
+}
+
+enum ExpenseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  POSTED
+  REJECTED
+  REVERSED
+}
+
 // -------------------------------------------------------------
 // CORE USER & PERMISSIONS (GLOBAL PERMISSION ARCHITECTURE)
 // -------------------------------------------------------------
@@ -274,6 +341,19 @@ model User {
   createdPayments     Payment[]    @relation("PaymentCreator")
   verifiedPayments    Payment[]    @relation("PaymentVerifier")
   reversedPayments    Payment[]    @relation("PaymentReverser")
+  createdSuppliers    Supplier[]   @relation("SupplierCreator")
+  createdPOs          PurchaseOrder[] @relation("POCreator")
+  approvedPOs         PurchaseOrder[] @relation("POApprover")
+  createdGRNs         GoodsReceipt[] @relation("GRNCreator")
+  postedGRNs          GoodsReceipt[] @relation("GRNPoster")
+  createdBills        SupplierBill[] @relation("BillCreator")
+  postedBills         SupplierBill[] @relation("BillPoster")
+  createdReturns      PurchaseReturn[] @relation("ReturnCreator")
+  postedReturns       PurchaseReturn[] @relation("ReturnPoster")
+  createdSupplierPayments SupplierPayment[] @relation("SupplierPaymentCreator")
+  reversedSupplierPayments SupplierPayment[] @relation("SupplierPaymentReverser")
+  createdExpenses     Expense[]    @relation("ExpenseCreator")
+  approvedExpenses    Expense[]    @relation("ExpenseApprover")
 
   @@index([email])
   @@index([role])
@@ -422,6 +502,10 @@ model Product {
   outwardEntries InventoryOutward[]
   outwardLines   InventoryOutwardLine[]
   outwardReconciliations OutwardReconciliation[]
+  poItems        PurchaseOrderItem[]
+  grnLines       GoodsReceiptLine[]
+  billItems      SupplierBillItem[]
+  returnLines    PurchaseReturnLine[]
 
   @@index([sku])
   @@index([category])
@@ -456,6 +540,10 @@ model Location {
   returnReconciliations OutwardReconciliation[]
   sourceTransfers  StockTransfer[] @relation("SourceLocation")
   destTransfers    StockTransfer[] @relation("DestLocation")
+  purchaseOrders   PurchaseOrder[]
+  goodsReceipts    GoodsReceipt[]
+  purchaseReturns  PurchaseReturn[]
+  expenses         Expense[]
 }
 
 model StockBalance {
@@ -988,8 +1076,399 @@ model CompanyConfig {
   nextPaymentNumber  Int      @default(1001)
   receiptPrefix      String   @default("REC-")
   nextReceiptNumber  Int      @default(1001)
+  supplierPrefix     String   @default("SUP-")
+  nextSupplierNumber Int      @default(1001)
+  poPrefix           String   @default("PO-")
+  nextPoNumber       Int      @default(1001)
+  grnPrefix          String   @default("GRN-")
+  nextGrnNumber      Int      @default(1001)
+  billPrefix         String   @default("BIL-")
+  nextBillNumber     Int      @default(1001)
+  returnPrefix       String   @default("PRT-")
+  nextReturnNumber   Int      @default(1001)
+  supplierPaymentPrefix String @default("SPAY-")
+  nextSupplierPaymentNumber Int @default(1001)
+  expensePrefix      String   @default("EXP-")
+  nextExpenseNumber  Int      @default(1001)
   currency           String   @default("INR")
   termsAndConditions String?
   deliveryRules      Json?
   updatedAt          DateTime @updatedAt
+}
+
+// -------------------------------------------------------------
+// PHASE 6: PURCHASES, SUPPLIERS, PAYABLES & EXPENSES
+// -------------------------------------------------------------
+
+model Supplier {
+  id              String             @id @default(uuid())
+  supplierCode    String             @unique
+  name            String
+  businessName    String?
+  contactPerson   String?
+  phone           String
+  email           String?
+  billingAddress  String?
+  gstin           String?
+  category        String             @default("General")
+  paymentTerms    String?            @default("Net 30")
+  payableBalance  Decimal            @default(0)
+  advanceBalance  Decimal            @default(0)
+  isActive        Boolean            @default(true)
+  notes           String?
+  createdById     String?
+  assignedToId    String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  createdBy       User?              @relation("SupplierCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  purchaseOrders  PurchaseOrder[]
+  goodsReceipts   GoodsReceipt[]
+  supplierBills   SupplierBill[]
+  purchaseReturns PurchaseReturn[]
+  supplierPayments SupplierPayment[]
+  allocations     SupplierPaymentAllocation[]
+  ledgerEntries   SupplierLedger[]
+  expenses        Expense[]
+
+  @@index([supplierCode])
+  @@index([name])
+  @@index([phone])
+  @@index([category])
+}
+
+model PurchaseOrder {
+  id                   String              @id @default(uuid())
+  poNumber             String              @unique
+  supplierId           String
+  locationId           String
+  orderDate            DateTime            @default(now())
+  expectedDeliveryDate DateTime?
+  status               PurchaseOrderStatus @default(DRAFT)
+  subtotal             Decimal
+  discount             Decimal             @default(0)
+  tax                  Decimal             @default(0)
+  freightCharges       Decimal             @default(0)
+  grandTotal           Decimal
+  notes                String?
+  createdById          String
+  submittedAt          DateTime?
+  submittedById        String?
+  approvedAt           DateTime?
+  approvedById         String?
+  cancelledAt          DateTime?
+  cancelledById        String?
+  cancelReason         String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  supplier             Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  location             Location            @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  createdBy            User                @relation("POCreator", fields: [createdById], references: [id])
+  approvedBy           User?               @relation("POApprover", fields: [approvedById], references: [id])
+  items                PurchaseOrderItem[]
+  goodsReceipts        GoodsReceipt[]
+  supplierBills        SupplierBill[]
+
+  @@index([poNumber])
+  @@index([supplierId])
+  @@index([locationId])
+  @@index([status])
+}
+
+model PurchaseOrderItem {
+  id               String        @id @default(uuid())
+  purchaseOrderId  String
+  productId        String
+  productName      String?
+  sku              String?
+  unit             String?       @default("pcs")
+  orderedQuantity  Int
+  receivedQuantity Int           @default(0)
+  unitPrice        Decimal
+  discount         Decimal       @default(0)
+  taxRate          Decimal       @default(18.0)
+  lineTotal        Decimal
+
+  purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product          Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+}
+
+model GoodsReceipt {
+  id                    String             @id @default(uuid())
+  receiptNumber         String             @unique
+  purchaseOrderId       String?
+  supplierId            String
+  destinationLocationId String
+  receivedDate          DateTime           @default(now())
+  status                GoodsReceiptStatus @default(POSTED)
+  notes                 String?
+  createdById           String
+  postedAt              DateTime?          @default(now())
+  postedById            String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  purchaseOrder         PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  supplier              Supplier           @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  destinationLocation   Location           @relation(fields: [destinationLocationId], references: [id], onDelete: Restrict)
+  createdBy             User               @relation("GRNCreator", fields: [createdById], references: [id])
+  postedBy              User?              @relation("GRNPoster", fields: [postedById], references: [id])
+  lines                 GoodsReceiptLine[]
+  supplierBills         SupplierBill[]
+  purchaseReturns       PurchaseReturn[]
+
+  @@index([receiptNumber])
+  @@index([supplierId])
+  @@index([destinationLocationId])
+  @@index([status])
+}
+
+model GoodsReceiptLine {
+  id              String       @id @default(uuid())
+  goodsReceiptId  String
+  productId       String
+  productName     String?
+  sku             String?
+  unit            String?      @default("pcs")
+  orderedQty      Int?
+  receivedQty     Int
+  acceptedQty     Int
+  rejectedQty     Int          @default(0)
+  rejectionReason String?
+
+  goodsReceipt    GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  product         Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([goodsReceiptId])
+  @@index([productId])
+}
+
+model SupplierBill {
+  id                    String                  @id @default(uuid())
+  billNumber            String                  @unique
+  supplierInvoiceNumber String
+  supplierId            String
+  purchaseOrderId       String?
+  goodsReceiptId        String?
+  billDate              DateTime                @default(now())
+  dueDate               DateTime?
+  subtotal              Decimal
+  discount              Decimal                 @default(0)
+  tax                   Decimal                 @default(0)
+  freight               Decimal                 @default(0)
+  grandTotal            Decimal
+  paidAmount            Decimal                 @default(0)
+  balanceAmount         Decimal
+  status                SupplierBillStatus      @default(POSTED)
+  notes                 String?
+  createdById           String
+  postedAt              DateTime?               @default(now())
+  postedById            String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  supplier              Supplier                @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchaseOrder         PurchaseOrder?          @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  goodsReceipt          GoodsReceipt?           @relation(fields: [goodsReceiptId], references: [id], onDelete: SetNull)
+  createdBy             User                    @relation("BillCreator", fields: [createdById], references: [id])
+  postedBy              User?                   @relation("BillPoster", fields: [postedById], references: [id])
+  items                 SupplierBillItem[]
+  allocations           SupplierPaymentAllocation[]
+  purchaseReturns       PurchaseReturn[]
+
+  @@unique([supplierId, supplierInvoiceNumber])
+  @@index([billNumber])
+  @@index([supplierId])
+  @@index([status])
+}
+
+model SupplierBillItem {
+  id             String       @id @default(uuid())
+  supplierBillId String
+  productId      String?
+  productName    String?
+  sku            String?
+  unit           String?      @default("pcs")
+  quantity       Int
+  unitPrice      Decimal
+  taxRate        Decimal      @default(18.0)
+  lineTotal      Decimal
+
+  supplierBill   SupplierBill @relation(fields: [supplierBillId], references: [id], onDelete: Cascade)
+  product        Product?     @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([supplierBillId])
+  @@index([productId])
+}
+
+model PurchaseReturn {
+  id                   String               @id @default(uuid())
+  returnNumber         String               @unique
+  supplierId           String
+  sourceLocationId     String
+  goodsReceiptId       String?
+  supplierBillId       String?
+  returnDate           DateTime             @default(now())
+  reason               String
+  status               PurchaseReturnStatus @default(POSTED)
+  totalAmount          Decimal              @default(0)
+  supplierCreditNoteRef String?
+  createdById          String
+  postedAt             DateTime?            @default(now())
+  postedById           String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  supplier             Supplier             @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  sourceLocation       Location             @relation(fields: [sourceLocationId], references: [id], onDelete: Restrict)
+  goodsReceipt         GoodsReceipt?        @relation(fields: [goodsReceiptId], references: [id], onDelete: SetNull)
+  supplierBill         SupplierBill?        @relation(fields: [supplierBillId], references: [id], onDelete: SetNull)
+  createdBy            User                 @relation("ReturnCreator", fields: [createdById], references: [id])
+  postedBy             User?                @relation("ReturnPoster", fields: [postedById], references: [id])
+  lines                PurchaseReturnLine[]
+
+  @@index([returnNumber])
+  @@index([supplierId])
+  @@index([sourceLocationId])
+  @@index([status])
+}
+
+model PurchaseReturnLine {
+  id               String         @id @default(uuid())
+  purchaseReturnId String
+  productId        String
+  productName      String?
+  sku              String?
+  quantity         Int
+  unitPrice        Decimal        @default(0)
+  lineTotal        Decimal        @default(0)
+
+  purchaseReturn   PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  product          Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([purchaseReturnId])
+  @@index([productId])
+}
+
+model SupplierPayment {
+  id                String                      @id @default(uuid())
+  paymentNumber     String                      @unique
+  supplierId        String
+  amount            Decimal
+  unallocatedAmount Decimal                     @default(0)
+  paymentMethod     PaymentMethod
+  paymentDate       DateTime                    @default(now())
+  referenceNumber   String?
+  status            SupplierPaymentStatus       @default(POSTED)
+  notes             String?
+  createdById       String
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  reversedAt        DateTime?
+  reversedById      String?
+  reversalReason    String?
+
+  supplier          Supplier                    @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  createdBy         User                        @relation("SupplierPaymentCreator", fields: [createdById], references: [id])
+  reversedBy        User?                       @relation("SupplierPaymentReverser", fields: [reversedById], references: [id])
+  allocations       SupplierPaymentAllocation[]
+
+  @@index([paymentNumber])
+  @@index([supplierId])
+  @@index([status])
+}
+
+model SupplierPaymentAllocation {
+  id                String          @id @default(uuid())
+  supplierPaymentId String?
+  supplierBillId    String
+  supplierId        String
+  allocatedAmount   Decimal
+  isReversed        Boolean         @default(false)
+  reversedAt        DateTime?
+  reversalReason    String?
+  createdById       String
+  createdAt         DateTime        @default(now())
+
+  supplierPayment   SupplierPayment? @relation(fields: [supplierPaymentId], references: [id], onDelete: Cascade)
+  supplierBill      SupplierBill    @relation(fields: [supplierBillId], references: [id], onDelete: Restrict)
+  supplier          Supplier        @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  @@index([supplierPaymentId])
+  @@index([supplierBillId])
+  @@index([supplierId])
+}
+
+model SupplierLedger {
+  id              String                  @id @default(uuid())
+  supplierId      String
+  entryType       SupplierLedgerEntryType
+  referenceId     String?
+  referenceNumber String
+  debit           Decimal                 @default(0)
+  credit          Decimal                 @default(0)
+  balance         Decimal
+  description     String
+  createdById     String
+  createdAt       DateTime                @default(now())
+
+  supplier        Supplier                @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  @@index([supplierId])
+  @@index([createdAt])
+}
+
+model ExpenseCategory {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  code        String    @unique
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  expenses    Expense[]
+}
+
+model Expense {
+  id              String          @id @default(uuid())
+  expenseNumber   String          @unique
+  categoryId      String
+  supplierId      String?
+  locationId      String?
+  title           String
+  description     String?
+  expenseDate     DateTime        @default(now())
+  amount          Decimal
+  tax             Decimal         @default(0)
+  totalAmount     Decimal
+  paymentMethod   PaymentMethod   @default(CASH)
+  referenceNumber String?
+  status          ExpenseStatus   @default(POSTED)
+  createdById     String
+  submittedAt     DateTime?
+  submittedById   String?
+  approvedAt      DateTime?
+  approvedById    String?
+  rejectedAt      DateTime?
+  rejectedById    String?
+  rejectionReason String?
+  reversalReason  String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  category        ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  supplier        Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  location        Location?       @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  createdBy       User            @relation("ExpenseCreator", fields: [createdById], references: [id])
+  approvedBy      User?           @relation("ExpenseApprover", fields: [approvedById], references: [id])
+
+  @@index([expenseNumber])
+  @@index([categoryId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([expenseDate])
 }
