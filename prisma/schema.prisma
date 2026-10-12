@@ -65,6 +65,7 @@ enum ActionName {
   VIEW_PROFIT_MARGINS
   DOWNLOAD_DOCUMENTS
   EXPORT_DATA
+  CLOSE
 }
 
 enum DataScope {
@@ -137,6 +138,16 @@ enum OutwardReconciliationStatus {
   PENDING
   RECONCILED
   DISCREPANCY
+}
+
+enum OutwardStatus {
+  DRAFT
+  DISPATCHED
+  RECONCILED
+  DISCREPANCY_PENDING
+  DISCREPANCY_APPROVED
+  CLOSED
+  REOPENED
 }
 
 enum OutwardDisposition {
@@ -215,6 +226,11 @@ model User {
   assignedOrders      Order[]      @relation("OrderAssignee")
   createdSales        Sale[]       @relation("SaleCreator")
   createdOutwards     InventoryOutward[] @relation("OutwardResponsibleStaff")
+  dispatchedOutwards  InventoryOutward[] @relation("OutwardDispatcher")
+  closedOutwards      InventoryOutward[] @relation("OutwardCloser")
+  reopenedOutwards    InventoryOutward[] @relation("OutwardReopener")
+  outwardApprovalsGiven OutwardApproval[] @relation("OutwardApprover")
+  outwardApprovalsRequested OutwardApproval[] @relation("OutwardRequester")
   assignedFollowUps   FollowUp[]   @relation("FollowUpAssignee")
   createdFollowUps    FollowUp[]   @relation("FollowUpCreator")
 
@@ -360,6 +376,8 @@ model Product {
   saleItems     SaleItem[]
   quotationItems QuotationItem[]
   outwardEntries InventoryOutward[]
+  outwardLines   InventoryOutwardLine[]
+  outwardReconciliations OutwardReconciliation[]
 
   @@index([sku])
   @@index([category])
@@ -391,6 +409,7 @@ model Location {
   stockBalances    StockBalance[]
   stockMovements   StockMovement[]
   outwardEntries   InventoryOutward[]
+  returnReconciliations OutwardReconciliation[]
   sourceTransfers  StockTransfer[] @relation("SourceLocation")
   destTransfers    StockTransfer[] @relation("DestLocation")
 }
@@ -445,6 +464,8 @@ model StockTransfer {
   sourceLocation        Location       @relation("SourceLocation", fields: [sourceLocationId], references: [id], onDelete: Restrict)
   destinationLocation   Location       @relation("DestLocation", fields: [destinationLocationId], references: [id], onDelete: Restrict)
   product               Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  linkedOutwards        InventoryOutward[]
+  linkedReconciliations OutwardReconciliation[]
 
   @@index([transferNumber])
 }
@@ -523,6 +544,7 @@ model Sale {
   items           SaleItem[]
   allocations     PaymentAllocation[]
   linkedOutwards  InventoryOutward[]
+  linkedReconciliations OutwardReconciliation[]
 
   @@index([invoiceNumber])
   @@index([customerId])
@@ -585,44 +607,126 @@ model QuotationItem {
 model InventoryOutward {
   id                   String                      @id @default(uuid())
   outwardNumber        String                      @unique
-  productId            String
-  quantity             Int
-  takenBy              String
+  status               OutwardStatus               @default(DRAFT)
   sourceLocationId     String
+  destinationLocationId String?
   purpose              String
+  takenBy              String
+  notes                String?
+  destination          String?
   responsibleStaffId   String
-  linkedSaleId         String?
-  reconciliationStatus OutwardReconciliationStatus @default(PENDING)
+  createdById          String?
+  dispatchedAt         DateTime?
+  dispatchedById       String?
+  closedAt             DateTime?
+  closedById           String?
+  reopenedAt           DateTime?
+  reopenedById         String?
+  reopenReason         String?
   hasDiscrepancy       Boolean                     @default(false)
   discrepancyReason    String?
   approvedById         String?
+  approvedAt           DateTime?
+  approvalNotes        String?
+  totalDispatchedQty   Int                         @default(0)
+  totalReconciledQty   Int                         @default(0)
+  totalDiscrepancyQty  Int                         @default(0)
+  linkedSaleId         String?
+  linkedTransferId     String?
+  reconciliationStatus OutwardReconciliationStatus @default(PENDING)
   createdAt            DateTime                    @default(now())
   updatedAt            DateTime                    @updatedAt
 
-  product              Product                     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productId            String?
+  quantity             Int?
+
+  product              Product?                    @relation(fields: [productId], references: [id], onDelete: Restrict)
   sourceLocation       Location                    @relation(fields: [sourceLocationId], references: [id], onDelete: Restrict)
   responsibleStaff     User                        @relation("OutwardResponsibleStaff", fields: [responsibleStaffId], references: [id])
+  dispatchedBy         User?                       @relation("OutwardDispatcher", fields: [dispatchedById], references: [id])
+  closedBy             User?                       @relation("OutwardCloser", fields: [closedById], references: [id])
+  reopenedBy           User?                       @relation("OutwardReopener", fields: [reopenedById], references: [id])
   linkedSale           Sale?                       @relation(fields: [linkedSaleId], references: [id], onDelete: SetNull)
+  linkedTransfer       StockTransfer?              @relation(fields: [linkedTransferId], references: [id], onDelete: SetNull)
+
+  lines                InventoryOutwardLine[]
   reconciliations      OutwardReconciliation[]
+  approvals            OutwardApproval[]
 
   @@index([outwardNumber])
-  @@index([productId])
+  @@index([status])
+  @@index([sourceLocationId])
+  @@index([responsibleStaffId])
   @@index([reconciliationStatus])
 }
 
-model OutwardReconciliation {
-  id           String              @id @default(uuid())
-  outwardId    String
-  disposition  OutwardDisposition
-  quantity     Int
-  linkedSaleId String?
-  notes        String?
-  createdById  String
-  createdAt    DateTime            @default(now())
+model InventoryOutwardLine {
+  id              String   @id @default(uuid())
+  outwardId       String
+  productId       String
+  quantity        Int
+  unit            String   @default("pcs")
+  reconciledQty   Int      @default(0)
+  discrepancyQty  Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  outward      InventoryOutward    @relation(fields: [outwardId], references: [id], onDelete: Cascade)
+  outward         InventoryOutward        @relation(fields: [outwardId], references: [id], onDelete: Cascade)
+  product         Product                 @relation(fields: [productId], references: [id], onDelete: Restrict)
+  reconciliations OutwardReconciliation[]
+
+  @@unique([outwardId, productId])
+  @@index([outwardId])
+  @@index([productId])
+}
+
+model OutwardReconciliation {
+  id                    String              @id @default(uuid())
+  outwardId             String
+  lineId                String?
+  productId             String
+  disposition           OutwardDisposition
+  quantity              Int
+  linkedSaleId          String?
+  linkedTransferId      String?
+  returnLocationId      String?
+  isReturnProcessed     Boolean             @default(false)
+  returnMovementId      String?
+  notes                 String?
+  createdById           String
+  createdAt             DateTime            @default(now())
+
+  outward               InventoryOutward      @relation(fields: [outwardId], references: [id], onDelete: Cascade)
+  line                  InventoryOutwardLine? @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  product               Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
+  linkedSale            Sale?                 @relation(fields: [linkedSaleId], references: [id], onDelete: SetNull)
+  linkedTransfer        StockTransfer?        @relation(fields: [linkedTransferId], references: [id], onDelete: SetNull)
+  returnLocation        Location?             @relation(fields: [returnLocationId], references: [id], onDelete: SetNull)
 
   @@index([outwardId])
+  @@index([lineId])
+  @@index([productId])
+}
+
+model OutwardApproval {
+  id                String   @id @default(uuid())
+  outwardId         String
+  requesterId       String
+  approverId        String
+  requestedQty      Int
+  reason            String
+  status            String   @default("APPROVED")
+  beforeDiscrepancy Int
+  afterDiscrepancy  Int
+  notes             String?
+  approvedAt        DateTime @default(now())
+
+  outward           InventoryOutward @relation(fields: [outwardId], references: [id], onDelete: Cascade)
+  approver          User             @relation("OutwardApprover", fields: [approverId], references: [id])
+  requester         User             @relation("OutwardRequester", fields: [requesterId], references: [id])
+
+  @@index([outwardId])
+  @@index([approverId])
 }
 
 // -------------------------------------------------------------
