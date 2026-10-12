@@ -26,6 +26,7 @@ enum ModuleName {
   QUOTATIONS
   PAYMENTS
   CUSTOMER_LEDGER
+  RECEIVABLES
   INVENTORY
   INVENTORY_OUTWARD
   STOCK_TRANSFERS
@@ -67,6 +68,13 @@ enum ActionName {
   EXPORT_DATA
   CLOSE
   CONVERT_TO_SALE
+  POST
+  ALLOCATE
+  AUTO_ALLOCATE_OLDEST_FIRST
+  ACCEPT_CUSTOMER_ADVANCE
+  APPLY_ADVANCE
+  REVERSE
+  PRINT
 }
 
 enum DataScope {
@@ -169,6 +177,29 @@ enum PaymentMethod {
   OTHER
 }
 
+enum PaymentStatus {
+  DRAFT
+  POSTED
+  PARTIALLY_REVERSED
+  REVERSED
+}
+
+enum AllocationType {
+  MANUAL
+  OLDEST_FIRST
+  ADVANCE_APPLIED
+}
+
+enum AdvanceMovementType {
+  PAYMENT_UNALLOCATED
+  PAYMENT_ALLOCATED
+  ADVANCE_APPLIED
+  PAYMENT_REFUNDED
+  PAYMENT_REVERSED
+  ALLOCATION_REVERSED
+  AUTHORIZED_ADJUSTMENT
+}
+
 enum PaymentVerificationStatus {
   PENDING_VERIFICATION
   VERIFIED
@@ -179,10 +210,14 @@ enum PaymentVerificationStatus {
 enum LedgerEntryType {
   SALE_INVOICE
   PAYMENT_RECEIPT
+  ADVANCE_APPLIED
+  PAYMENT_REVERSAL
+  ALLOCATION_REVERSAL
   CREDIT_NOTE
   DEBIT_NOTE
   REVERSAL
   OPENING_BALANCE
+  AUTHORIZED_ADJUSTMENT
 }
 
 enum FollowUpType {
@@ -236,6 +271,9 @@ model User {
   outwardApprovalsRequested OutwardApproval[] @relation("OutwardRequester")
   assignedFollowUps   FollowUp[]   @relation("FollowUpAssignee")
   createdFollowUps    FollowUp[]   @relation("FollowUpCreator")
+  createdPayments     Payment[]    @relation("PaymentCreator")
+  verifiedPayments    Payment[]    @relation("PaymentVerifier")
+  reversedPayments    Payment[]    @relation("PaymentReverser")
 
   @@index([email])
   @@index([role])
@@ -316,6 +354,7 @@ model Customer {
   priceListId     String?
   assignedToId    String?            // Data scope: ASSIGNED
   createdById     String?            // Data scope: OWN
+  advanceBalance  Decimal            @default(0)
   isActive        Boolean            @default(true)
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
@@ -329,6 +368,8 @@ model Customer {
   quotations      Quotation[]
   payments        Payment[]
   ledgerEntries   CustomerLedger[]
+  advanceMovements CustomerAdvanceMovement[]
+  paymentAllocations PaymentAllocation[]
   followUps       FollowUp[]
 
   @@index([phone])
@@ -537,6 +578,7 @@ model Sale {
   billingAddress  String?
   shippingAddress String?
   saleDate        DateTime           @default(now())
+  dueDate         DateTime?
   subtotal        Decimal
   discount        Decimal            @default(0)
   tax             Decimal            @default(0)
@@ -563,6 +605,7 @@ model Sale {
   finalizedBy     User?              @relation("SaleFinalizer", fields: [finalizedById], references: [id])
   items           SaleItem[]
   allocations     PaymentAllocation[]
+  advanceMovements CustomerAdvanceMovement[]
   linkedOutwards  InventoryOutward[]
   linkedReconciliations OutwardReconciliation[]
 
@@ -778,39 +821,89 @@ model OutwardApproval {
 
 model Payment {
   id                 String                    @id @default(uuid())
-  paymentReference   String                    @unique
+  receiptNumber      String                    @unique
+  paymentReference   String?                   @unique
   customerId         String
-  paymentMethod      PaymentMethod
   amount             Decimal
+  unallocatedAmount  Decimal                   @default(0)
+  currency           String                    @default("INR")
+  paymentMethod      PaymentMethod
+  receivedAt         DateTime                  @default(now())
   paymentDate        DateTime                  @default(now())
-  verificationStatus PaymentVerificationStatus @default(PENDING_VERIFICATION)
+  referenceNumber    String?
+  notes              String?
+  status             PaymentStatus             @default(POSTED)
+  verificationStatus PaymentVerificationStatus @default(VERIFIED)
   verifiedById       String?
   verifiedAt         DateTime?
-  transactionDetails String?
-  notes              String?
+  idempotencyKey     String?                   @unique
   createdById        String
   createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  reversedAt         DateTime?
+  reversedById       String?
+  reversalReason     String?
+  reversedAmount     Decimal                   @default(0)
 
   customer           Customer                  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdBy          User                      @relation("PaymentCreator", fields: [createdById], references: [id])
+  verifiedBy         User?                     @relation("PaymentVerifier", fields: [verifiedById], references: [id])
+  reversedBy         User?                     @relation("PaymentReverser", fields: [reversedById], references: [id])
   allocations        PaymentAllocation[]
+  advanceMovements   CustomerAdvanceMovement[]
 
-  @@index([paymentReference])
+  @@index([receiptNumber])
   @@index([customerId])
-  @@index([verificationStatus])
+  @@index([status])
+  @@index([receivedAt])
 }
 
 model PaymentAllocation {
-  id              String   @id @default(uuid())
-  paymentId       String
+  id              String         @id @default(uuid())
+  paymentId       String?
   saleId          String
+  customerId      String
   allocatedAmount Decimal
-  createdAt       DateTime @default(now())
+  allocationType  AllocationType @default(MANUAL)
+  createdById     String
+  createdAt       DateTime       @default(now())
+  isReversed      Boolean        @default(false)
+  reversedAt      DateTime?
+  reversedById    String?
+  reversalReason  String?
 
-  payment         Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  sale            Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  payment         Payment?       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  sale            Sale           @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  customer        Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  advanceMovements CustomerAdvanceMovement[]
 
   @@index([paymentId])
   @@index([saleId])
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+model CustomerAdvanceMovement {
+  id              String              @id @default(uuid())
+  customerId      String
+  movementType    AdvanceMovementType
+  amount          Decimal             // Positive for advance addition, negative for deduction
+  balanceAfter    Decimal             // Must never be negative
+  paymentId       String?
+  allocationId    String?
+  saleId          String?
+  referenceNumber String?
+  notes           String?
+  createdById     String
+  createdAt       DateTime            @default(now())
+
+  customer        Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  payment         Payment?            @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  allocation      PaymentAllocation?  @relation(fields: [allocationId], references: [id], onDelete: SetNull)
+  sale            Sale?               @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
+  @@index([customerId])
+  @@index([createdAt])
 }
 
 model CustomerLedger {
@@ -893,6 +986,8 @@ model CompanyConfig {
   nextOutwardNumber  Int      @default(1001)
   paymentPrefix      String   @default("PAY-")
   nextPaymentNumber  Int      @default(1001)
+  receiptPrefix      String   @default("REC-")
+  nextReceiptNumber  Int      @default(1001)
   currency           String   @default("INR")
   termsAndConditions String?
   deliveryRules      Json?

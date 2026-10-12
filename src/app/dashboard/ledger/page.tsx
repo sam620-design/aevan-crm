@@ -1,149 +1,278 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   BookOpen,
   Search,
-  ArrowUpRight,
-  ArrowDownLeft,
-  FileText,
   Printer,
   Calendar,
+  Building2,
+  TrendingUp,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Filter,
 } from "lucide-react";
 
 export default function CustomerLedgerPage() {
-  const [selectedCustomer, setSelectedCustomer] = useState("Rajesh Hardware & Sanitation");
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [ledgerData, setLedgerData] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const ledgerEntries = [
-    {
-      id: "LED-001",
-      date: "09 Oct 2026",
-      type: "SALE_INVOICE",
-      ref: "INV-1002",
-      description: "Direct Sale - GOOD TOUCH Formulations",
-      debit: "₹45,000",
-      credit: "₹0",
-      runningBalance: "₹45,000",
-    },
-    {
-      id: "LED-002",
-      date: "09 Oct 2026",
-      type: "PAYMENT_RECEIPT",
-      ref: "PAY-1002",
-      description: "UPI Settlement via PhonePe",
-      debit: "₹0",
-      credit: "₹20,000",
-      runningBalance: "₹25,000",
-    },
-  ];
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
+
+  async function fetchCustomers() {
+    try {
+      const res = await fetch("/api/customers?limit=100");
+      const data = await res.json();
+      if (res.ok && data.items?.length > 0) {
+        setCustomers(data.items);
+        setSelectedCustomerId(data.items[0].id);
+        fetchLedger(data.items[0].id, startDate, endDate);
+      }
+    } catch (err) {
+      console.error("Error fetching customers", err);
+    }
+  }
+
+  async function fetchLedger(customerId: string, start?: string, end?: string) {
+    if (!customerId) return;
+    try {
+      setLoading(true);
+      setError(null);
+      let url = `/api/customers/${customerId}/ledger`;
+      const params = new URLSearchParams();
+      if (start) params.set("startDate", start);
+      if (end) params.set("endDate", end);
+      if (params.toString()) url += `?${params.toString()}`;
+
+      const res = await fetch(url);
+      const data = await res.json();
+      if (res.ok) {
+        setLedgerData(data.ledger);
+      } else {
+        setError(data.error || "Failed to load customer ledger");
+      }
+    } catch (err: any) {
+      setError(err.message || "Network error loading ledger");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleFilterSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (selectedCustomerId) {
+      fetchLedger(selectedCustomerId, startDate, endDate);
+    }
+  }
 
   return (
-    <div className="space-y-5 max-w-7xl pb-12">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="space-y-6 max-w-7xl mx-auto pb-16">
+      {/* 1. Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-indigo-700" />
-            <h1 className="text-lg sm:text-xl font-bold text-slate-900">
+            <BookOpen className="w-6 h-6 text-indigo-700" />
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
               Customer Financial Ledger
             </h1>
           </div>
-          <p className="text-xs text-slate-500">
-            Immutable statement of sales, receipts, credit notes, and running balance.
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            Immutable statement of invoices, payments, reversals, and running balances.
           </p>
         </div>
 
         <button
-          onClick={() => alert("Generating printable customer statement PDF...")}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow transition-colors"
+          onClick={() => window.print()}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-sm transition-colors"
         >
           <Printer className="w-4 h-4" />
-          <span>Export Ledger Statement</span>
+          <span>Print / Export Statement</span>
         </button>
       </div>
 
-      {/* Customer Selection */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-            Viewing Ledger Statement For
-          </label>
-          <select
-            value={selectedCustomer}
-            onChange={(e) => setSelectedCustomer(e.target.value)}
-            className="w-full sm:w-80 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-brand-600"
-          >
-            <option value="Rajesh Hardware & Sanitation">Rajesh Hardware & Sanitation (CUST-1001)</option>
-            <option value="Patna Central Cleaning Supplies">Patna Central Cleaning Supplies (CUST-1002)</option>
-            <option value="Nalanda Deep Clean Services">Nalanda Deep Clean Services (CUST-1003)</option>
-          </select>
-        </div>
-
-        <div className="sm:text-right">
-          <p className="text-[11px] text-slate-500 uppercase font-semibold">Net Outstanding Balance</p>
-          <p className="text-xl font-black text-red-600">₹25,000</p>
-        </div>
-      </div>
-
-      {/* Ledger Entries List */}
-      <div className="space-y-3">
-        {ledgerEntries.map((entry) => (
-          <div
-            key={entry.id}
-            className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-2.5"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <div
-                  className={`p-2 rounded-xl shrink-0 ${
-                    entry.debit !== "₹0"
-                      ? "bg-red-50 text-red-600"
-                      : "bg-emerald-50 text-emerald-600"
-                  }`}
-                >
-                  {entry.debit !== "₹0" ? (
-                    <ArrowUpRight className="w-4 h-4" />
-                  ) : (
-                    <ArrowDownLeft className="w-4 h-4" />
-                  )}
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-900 text-xs sm:text-sm">
-                    {entry.description}
-                  </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Ref: <span className="font-mono font-semibold text-slate-700">{entry.ref}</span> • {entry.date}
-                  </p>
-                </div>
-              </div>
-
-              <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                  entry.debit !== "₹0"
-                    ? "bg-red-100 text-red-800"
-                    : "bg-emerald-100 text-emerald-800"
-                }`}
-              >
-                {entry.type === "SALE_INVOICE" ? "INVOICE (+)" : "PAYMENT (-)"}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-100 text-xs text-center">
-              <div>
-                <p className="text-slate-400 text-[10px]">Debit (Charges)</p>
-                <p className="font-bold text-red-600">{entry.debit}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 text-[10px]">Credit (Paid)</p>
-                <p className="font-bold text-emerald-600">{entry.credit}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 text-[10px]">Running Balance</p>
-                <p className="font-bold text-slate-900">{entry.runningBalance}</p>
-              </div>
-            </div>
+      {/* 2. Customer & Date Filters */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <form onSubmit={handleFilterSubmit} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Select Customer *
+            </label>
+            <select
+              value={selectedCustomerId}
+              onChange={(e) => {
+                setSelectedCustomerId(e.target.value);
+                fetchLedger(e.target.value, startDate, endDate);
+              }}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.customerCode}) - Advance: ₹{Number(c.advanceBalance || 0)}
+                </option>
+              ))}
+            </select>
           </div>
-        ))}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Start Date
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-semibold self-end"
+            >
+              Apply
+            </button>
+          </div>
+        </form>
       </div>
+
+      {/* 3. Summary Cards */}
+      {ledgerData && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-1.5 text-rose-600 mb-1">
+              <ArrowUpRight className="w-4 h-4" />
+              <p className="text-xs font-bold uppercase tracking-wider">Total Debits</p>
+            </div>
+            <p className="text-lg sm:text-xl font-black text-slate-900">
+              ₹{Number(ledgerData.summary.totalDebits).toLocaleString("en-IN")}
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Invoices & charges</p>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-1.5 text-emerald-600 mb-1">
+              <ArrowDownLeft className="w-4 h-4" />
+              <p className="text-xs font-bold uppercase tracking-wider">Total Credits</p>
+            </div>
+            <p className="text-lg sm:text-xl font-black text-slate-900">
+              ₹{Number(ledgerData.summary.totalCredits).toLocaleString("en-IN")}
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Payments & deposits</p>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Net Outstanding</p>
+            <p className={`text-lg sm:text-xl font-black mt-1 ${
+              Number(ledgerData.summary.closingBalance) > 0 ? "text-rose-700" : "text-emerald-700"
+            }`}>
+              ₹{Number(ledgerData.summary.closingBalance).toLocaleString("en-IN")}
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              {Number(ledgerData.summary.closingBalance) > 0 ? "Customer owes company" : "Net settled"}
+            </p>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Advance Credit</p>
+            <p className="text-lg sm:text-xl font-black text-indigo-700 mt-1">
+              ₹{Number(ledgerData.summary.currentAdvanceBalance).toLocaleString("en-IN")}
+            </p>
+            <p className="text-[10px] text-indigo-400 mt-0.5">Unallocated advance held</p>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Ledger Statement Table */}
+      {loading ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500 text-sm">
+          Loading statement entries...
+        </div>
+      ) : error ? (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-rose-700 text-xs">
+          {error}
+        </div>
+      ) : !ledgerData || ledgerData.entries.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500 text-sm">
+          No transactions found for the selected customer and period.
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs sm:text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4">Type</th>
+                  <th className="py-3 px-4">Reference #</th>
+                  <th className="py-3 px-4">Description</th>
+                  <th className="py-3 px-4 text-right">Debit (₹)</th>
+                  <th className="py-3 px-4 text-right">Credit (₹)</th>
+                  <th className="py-3 px-4 text-right">Balance (₹)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {ledgerData.entries.map((entry: any) => {
+                  const isDebit = Number(entry.debit) > 0;
+                  return (
+                    <tr key={entry.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
+                        {new Date(entry.createdAt).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          isDebit
+                            ? "bg-rose-50 text-rose-700 border border-rose-200"
+                            : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        }`}>
+                          {entry.entryType}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
+                        {entry.referenceNumber}
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 text-xs">
+                        {entry.description}
+                      </td>
+                      <td className="py-3 px-4 text-right font-semibold text-rose-700">
+                        {Number(entry.debit) > 0 ? `₹${Number(entry.debit).toLocaleString("en-IN")}` : "-"}
+                      </td>
+                      <td className="py-3 px-4 text-right font-semibold text-emerald-700">
+                        {Number(entry.credit) > 0 ? `₹${Number(entry.credit).toLocaleString("en-IN")}` : "-"}
+                      </td>
+                      <td className="py-3 px-4 text-right font-extrabold text-slate-900">
+                        ₹{Number(entry.balance).toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
