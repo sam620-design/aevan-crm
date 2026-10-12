@@ -18,12 +18,14 @@
     "test": "tsx tests/phase1-security.test.ts && tsx tests/phase2-execution.test.ts && tsx tests/phase3-execution.test.ts && tsx tests/phase4-execution.test.ts && tsx tests/phase5-execution.test.ts && tsx tests/phase6-execution.test.ts"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.9",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "jose": "^5.9.6",
     "lucide-react": "^0.475.0",
     "next": "^14.2.23",
+    "pg-gateway": "^0.3.0-beta.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.6.0",
