@@ -45,6 +45,7 @@ enum ModuleName {
   DOCUMENTS
   USER_PERMISSIONS
   COMPANY_CONFIG
+  SERVICES
 }
 
 enum ActionName {
@@ -100,6 +101,38 @@ enum PermissionChangeType {
   GRANT
   MODIFY
   REVOKE
+}
+
+enum StaffAccessType {
+  VIEW
+  MANAGEMENT_ASSIGNMENT
+}
+
+enum ServiceStatus {
+  SCHEDULED
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  RESCHEDULED
+  CANCELLED
+}
+
+enum ServiceCategory {
+  DEEP_CLEANING
+  OFFICE_CLEANING
+  SOFA_CLEANING
+  CARPET_CLEANING
+  TANK_CLEANING
+  SANITIZATION
+  FACILITY_MANAGEMENT
+  OTHER
+}
+
+enum ServiceBillingStatus {
+  UNBILLED
+  INVOICED
+  PAID
+  PARTIALLY_PAID
 }
 
 enum CustomerType {
@@ -356,6 +389,14 @@ model User {
   createdExpenses     Expense[]    @relation("ExpenseCreator")
   approvedExpenses    Expense[]    @relation("ExpenseApprover")
 
+  adminStaffGrantsReceived StaffAccessGrant[] @relation("AdminStaffGrantsReceived")
+  staffGrantsSubject       StaffAccessGrant[] @relation("StaffGrantsSubject")
+  superadminGrantsGiven    StaffAccessGrant[] @relation("SuperadminStaffGrantsGiven")
+  superadminGrantsRevoked  StaffAccessGrant[] @relation("SuperadminStaffGrantsRevoked")
+
+  assignedServices         CleaningService[]  @relation("ServiceAssignedStaff")
+  createdServices          CleaningService[]  @relation("ServiceCreator")
+
   @@index([email])
   @@index([role])
 }
@@ -415,6 +456,30 @@ model AuditLog {
   @@index([createdAt])
 }
 
+model StaffAccessGrant {
+  id               String          @id @default(uuid())
+  adminId          String
+  staffId          String
+  accessType       StaffAccessType
+  grantedById      String
+  isActive         Boolean         @default(true)
+  revokedAt        DateTime?
+  revokedById      String?
+  revocationReason String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  admin            User            @relation("AdminStaffGrantsReceived", fields: [adminId], references: [id], onDelete: Cascade)
+  staff            User            @relation("StaffGrantsSubject", fields: [staffId], references: [id], onDelete: Cascade)
+  grantedBy        User            @relation("SuperadminStaffGrantsGiven", fields: [grantedById], references: [id])
+  revokedBy        User?           @relation("SuperadminStaffGrantsRevoked", fields: [revokedById], references: [id])
+
+  @@unique([adminId, staffId, accessType])
+  @@index([adminId, isActive])
+  @@index([staffId, isActive])
+  @@index([accessType])
+}
+
 // -------------------------------------------------------------
 // CUSTOMERS & PRICING
 // -------------------------------------------------------------
@@ -452,6 +517,7 @@ model Customer {
   advanceMovements CustomerAdvanceMovement[]
   paymentAllocations PaymentAllocation[]
   followUps       FollowUp[]
+  services        CleaningService[]
 
   @@index([phone])
   @@index([name])
@@ -545,6 +611,7 @@ model Location {
   goodsReceipts    GoodsReceipt[]
   purchaseReturns  PurchaseReturn[]
   expenses         Expense[]
+  services         CleaningService[]
 }
 
 model StockBalance {
@@ -697,6 +764,7 @@ model Sale {
   advanceMovements CustomerAdvanceMovement[]
   linkedOutwards  InventoryOutward[]
   linkedReconciliations OutwardReconciliation[]
+  linkedServices  CleaningService[]
 
   @@index([saleNumber])
   @@index([invoiceNumber])
@@ -1091,6 +1159,8 @@ model CompanyConfig {
   nextSupplierPaymentNumber Int @default(1001)
   expensePrefix      String   @default("EXP-")
   nextExpenseNumber  Int      @default(1001)
+  servicePrefix      String   @default("SRV-")
+  nextServiceNumber  Int      @default(1001)
   currency           String   @default("INR")
   termsAndConditions String?
   deliveryRules      Json?
@@ -1472,4 +1542,64 @@ model Expense {
   @@index([supplierId])
   @@index([status])
   @@index([expenseDate])
+}
+
+// -------------------------------------------------------------
+// DEDICATED SERVICES MODULE
+// -------------------------------------------------------------
+
+model CleaningService {
+  id                String               @id @default(uuid())
+  serviceNumber     String               @unique
+  customerId        String?
+  customerName      String
+  customerPhone     String
+  customerEmail     String?
+  serviceAddress    String
+  propertyType      String?
+  propertySize      String?
+  locationId        String?
+  category          ServiceCategory      @default(DEEP_CLEANING)
+  customCategory    String?
+  requirements      String?
+  scheduledDate     DateTime
+  timeSlot          String?
+  
+  assignedStaffId   String?
+  createdById       String
+  
+  status            ServiceStatus        @default(SCHEDULED)
+  previousStatus    ServiceStatus?
+  statusReason      String?
+  
+  estimatedPrice    Decimal              @default(0.0) @db.Decimal(12, 2)
+  finalPrice        Decimal?             @db.Decimal(12, 2)
+  billingStatus     ServiceBillingStatus @default(UNBILLED)
+  saleId            String?
+  
+  materialsUsed     Json?
+  beforePhotos      String[]             @default([])
+  afterPhotos       String[]             @default([])
+  completionNotes   String?
+  completedAt       DateTime?
+  
+  followUpDate      DateTime?
+  followUpNotes     String?
+  
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  customer          Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  location          Location?            @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  assignedStaff     User?                @relation("ServiceAssignedStaff", fields: [assignedStaffId], references: [id], onDelete: SetNull)
+  createdBy         User                 @relation("ServiceCreator", fields: [createdById], references: [id])
+  sale              Sale?                @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
+  @@index([serviceNumber])
+  @@index([assignedStaffId])
+  @@index([createdById])
+  @@index([customerId])
+  @@index([status])
+  @@index([scheduledDate])
+  @@index([category])
 }

@@ -112,11 +112,11 @@ async function runPhase7TestSuite() {
 
   const ungrantedPermissionsMap: Record<string, DataScope> = {};
   assert(
-    evaluateUserPermission(staffUser, ungrantedPermissionsMap, ModuleName.FINANCIAL_REPORTS, ActionName.VIEW, DataScope.OWN) === false,
+    evaluateUserPermission(staffUser, ungrantedPermissionsMap, ModuleName.REPORTS, ActionName.VIEW, DataScope.OWN) === false,
     "1.4 Zero implicit permissions: Admin/Staff without grants cannot view financial reports"
   );
   assert(
-    evaluateUserPermission(adminUser, ungrantedPermissionsMap, ModuleName.SETTINGS, ActionName.UPDATE, DataScope.OWN) === false,
+    evaluateUserPermission(adminUser, ungrantedPermissionsMap, ModuleName.COMPANY_CONFIG, ActionName.EDIT, DataScope.OWN) === false,
     "1.5 Zero implicit permissions: Cannot modify system settings without explicit permission"
   );
 
@@ -129,7 +129,7 @@ async function runPhase7TestSuite() {
   }
   const demoteAttempt = attemptRevokeSuperadminRole(superadminUser, Role.STAFF);
   assert(
-    demoteAttempt.success === false && demoteAttempt.error?.includes("CANNOT_REVOKE_SUPERADMIN_ROLE"),
+    demoteAttempt.success === false && Boolean(demoteAttempt.error?.includes("CANNOT_REVOKE_SUPERADMIN_ROLE")),
     "1.6 Root Non-Revocability: Attempting to downgrade Superadmin role is blocked"
   );
 
@@ -176,7 +176,7 @@ async function runPhase7TestSuite() {
   // 1.13 Sensitive Financial Information Policy (VIEW_PROFIT_MARGINS)
   function canViewProfitMargins(user: SessionUser, userPerms: Record<string, DataScope>): boolean {
     if (user.role === Role.SUPERADMIN) return true;
-    return evaluateUserPermission(user, userPerms, ModuleName.FINANCIAL_REPORTS, ActionName.VIEW_PROFIT_MARGINS, DataScope.OWN);
+    return evaluateUserPermission(user, userPerms, ModuleName.REPORTS, ActionName.VIEW_PROFIT_MARGINS, DataScope.OWN);
   }
   assert(
     canViewProfitMargins(superadminUser, {}) === true,
@@ -259,7 +259,7 @@ async function runPhase7TestSuite() {
   );
   const invalidDeduct = deductStock(490, 500);
   assert(
-    !invalidDeduct.success && invalidDeduct.error?.includes("INSUFFICIENT_STOCK"),
+    !invalidDeduct.success && Boolean(invalidDeduct.error?.includes("INSUFFICIENT_STOCK")),
     "2.7 Negative Stock Prevention: Deducting more than available stock is rejected atomically"
   );
 
@@ -350,8 +350,8 @@ async function runPhase7TestSuite() {
   );
 
   // 3.6 Cross-Customer Isolation
-  const custAId = "cust-101";
-  const custBId = "cust-202";
+  const custAId: string = "cust-101";
+  const custBId: string = "cust-202";
   const isCrossCustAllocBlocked = custAId !== custBId;
   assert(
     isCrossCustAllocBlocked,

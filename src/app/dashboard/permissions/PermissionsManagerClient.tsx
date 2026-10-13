@@ -12,6 +12,7 @@ import {
   Shield,
   Clock,
 } from "lucide-react";
+import StaffAccessManager from "./StaffAccessManager";
 
 const MODULES = [
   "DASHBOARD",
@@ -19,6 +20,7 @@ const MODULES = [
   "ORDERS",
   "SALES",
   "QUOTATIONS",
+  "SERVICES",
   "PAYMENTS",
   "CUSTOMER_LEDGER",
   "INVENTORY",
@@ -642,6 +644,9 @@ export default function PermissionsManagerClient({
           </div>
         ) : null}
       </div>
+
+      {/* Admin-to-Staff Data Visibility & Supervision Control */}
+      <StaffAccessManager users={initialUsers} />
 
       {/* Permission Audit Trail Log */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">

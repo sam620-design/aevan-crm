@@ -99,3 +99,5 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     return null;
   }
 }
+
+export const getSession = getCurrentUser;

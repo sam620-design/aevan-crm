@@ -17,7 +17,8 @@
     "test:phase5": "tsx tests/phase5-execution.test.ts",
     "test:phase6": "tsx tests/phase6-execution.test.ts",
     "test:phase7": "tsx tests/phase7-audit.test.ts",
-    "test": "tsx tests/phase1-security.test.ts && tsx tests/phase2-execution.test.ts && tsx tests/phase3-execution.test.ts && tsx tests/phase4-execution.test.ts && tsx tests/phase5-execution.test.ts && tsx tests/phase6-execution.test.ts && tsx tests/phase7-audit.test.ts"
+    "test:phase8": "tsx tests/phase8-services-security.test.ts",
+    "test": "tsx tests/phase1-security.test.ts && tsx tests/phase2-execution.test.ts && tsx tests/phase3-execution.test.ts && tsx tests/phase4-execution.test.ts && tsx tests/phase5-execution.test.ts && tsx tests/phase6-execution.test.ts && tsx tests/phase7-audit.test.ts && tsx tests/phase8-services-security.test.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.9",

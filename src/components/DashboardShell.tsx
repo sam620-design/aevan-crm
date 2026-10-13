@@ -31,6 +31,7 @@ import {
   FileSpreadsheet,
   Undo2,
   Wallet,
+  Sparkles,
 } from "lucide-react";
 import { SessionUser } from "@/lib/auth";
 
@@ -47,6 +48,7 @@ export default function DashboardShell({
 
   const navItems = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { label: "Cleaning Services", href: "/dashboard/services", icon: Sparkles },
     { label: "Customers", href: "/dashboard/customers", icon: Users },
     { label: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
     { label: "Sales", href: "/dashboard/sales", icon: Receipt },
