@@ -106,15 +106,19 @@ export default function ServicesPage() {
         const data = await res.json();
         setCurrentUser(data.user);
         fetchServices();
-        fetchAuxiliaryData();
+        fetchAuxiliaryData(data.user);
       } else {
-        setCurrentUser({ role: "STAFF" });
+        const fallback = { role: "STAFF" };
+        setCurrentUser(fallback);
         fetchServices();
+        fetchAuxiliaryData(fallback);
       }
     } catch (err) {
       console.error("Session check failed:", err);
-      setCurrentUser({ role: "STAFF" });
+      const fallback = { role: "STAFF" };
+      setCurrentUser(fallback);
       fetchServices();
+      fetchAuxiliaryData(fallback);
     }
   }
 
@@ -141,21 +145,25 @@ export default function ServicesPage() {
     }
   }
 
-  async function fetchAuxiliaryData() {
+  async function fetchAuxiliaryData(userObj?: any) {
+    const role = userObj?.role || currentUser?.role;
     try {
-      const [custRes, staffRes] = await Promise.all([
-        fetch("/api/customers?limit=100"),
-        fetch("/api/users"),
-      ]);
+      const custRes = await fetch("/api/customers?limit=100");
       if (custRes.ok) {
         const cData = await custRes.json();
         setCustomers(cData.data || cData.customers || []);
       }
-      if (staffRes.ok) {
-        const sData = await staffRes.json();
-        // Filter to STAFF users only
-        const allStaff = (sData.users || []).filter((u: any) => u.role === "STAFF");
-        setStaffList(allStaff);
+
+      // Only Superadmin and Admin need the full staff directory for assignment
+      if (role === "SUPERADMIN" || role === "ADMIN") {
+        const staffRes = await fetch("/api/users");
+        if (staffRes.ok) {
+          const sData = await staffRes.json();
+          const allStaff = (sData.users || []).filter((u: any) => u.role === "STAFF");
+          setStaffList(allStaff);
+        }
+      } else if (userObj) {
+        setStaffList([userObj]);
       }
     } catch (err) {
       console.error("Failed to load auxiliary data:", err);

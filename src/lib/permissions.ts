@@ -36,14 +36,26 @@ export async function hasPermission(
     });
 
     if (!permission) {
-      if (user.role === Role.STAFF && (module === ModuleName.SERVICES || module === ModuleName.SALES)) {
-        if (
-          action === ActionName.VIEW ||
-          action === ActionName.CREATE ||
-          action === ActionName.EDIT ||
-          action === ActionName.CREATE_SALE
-        ) {
-          return requiredScope === DataScope.OWN;
+      if (user.role === Role.STAFF) {
+        if (module === ModuleName.SERVICES || module === ModuleName.SALES) {
+          if (
+            action === ActionName.VIEW ||
+            action === ActionName.CREATE ||
+            action === ActionName.EDIT ||
+            action === ActionName.CREATE_SALE
+          ) {
+            return requiredScope === DataScope.OWN;
+          }
+        }
+        if (module === ModuleName.CUSTOMERS) {
+          if (action === ActionName.VIEW || action === ActionName.CREATE) {
+            return true;
+          }
+        }
+        if (module === ModuleName.INVENTORY) {
+          if (action === ActionName.VIEW) {
+            return true;
+          }
         }
       }
       return false;
@@ -53,14 +65,26 @@ export async function hasPermission(
     return isScopeSufficient(permission.scope, requiredScope);
   } catch (error) {
     console.error("Permission check database error:", error);
-    if (user.role === Role.STAFF && (module === ModuleName.SERVICES || module === ModuleName.SALES)) {
-      if (
-        action === ActionName.VIEW ||
-        action === ActionName.CREATE ||
-        action === ActionName.EDIT ||
-        action === ActionName.CREATE_SALE
-      ) {
-        return requiredScope === DataScope.OWN;
+    if (user.role === Role.STAFF) {
+      if (module === ModuleName.SERVICES || module === ModuleName.SALES) {
+        if (
+          action === ActionName.VIEW ||
+          action === ActionName.CREATE ||
+          action === ActionName.EDIT ||
+          action === ActionName.CREATE_SALE
+        ) {
+          return requiredScope === DataScope.OWN;
+        }
+      }
+      if (module === ModuleName.CUSTOMERS) {
+        if (action === ActionName.VIEW || action === ActionName.CREATE) {
+          return true;
+        }
+      }
+      if (module === ModuleName.INVENTORY) {
+        if (action === ActionName.VIEW) {
+          return true;
+        }
       }
     }
     return false;

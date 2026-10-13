@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { SessionUser } from "@/lib/auth";
 import { hasPermission, isSuperadmin } from "@/lib/permissions";
-import { ModuleName, ActionName, DataScope, Prisma } from "@prisma/client";
+import { ModuleName, ActionName, DataScope, Prisma, Role } from "@prisma/client";
 import { logAuditEvent } from "@/lib/audit";
 
 export async function getCustomers(
@@ -37,7 +37,7 @@ export async function getCustomers(
       },
     });
 
-    const scope = userPerm?.scope || DataScope.OWN;
+    const scope = userPerm?.scope || (user.role === Role.STAFF ? DataScope.ALL : DataScope.OWN);
 
     if (scope === DataScope.OWN) {
       where.createdById = user.id;
