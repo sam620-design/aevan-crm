@@ -147,7 +147,7 @@ export default function DashboardShell({
           />
 
           {/* Drawer Content */}
-          <div className="relative w-4/5 max-w-xs bg-slate-900 text-slate-300 flex flex-col h-full shadow-2xl z-10 overflow-hidden">
+          <div className="relative w-4/5 max-w-xs bg-slate-900 text-slate-300 flex flex-col h-[100dvh] shadow-2xl z-10 overflow-hidden">
             {/* Drawer Header */}
             <div className="p-4 border-b border-slate-800 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
@@ -174,7 +174,7 @@ export default function DashboardShell({
             </div>
 
             {/* Drawer Nav Links (Separately scrollable) */}
-            <nav className="flex-1 overflow-y-auto p-2 space-y-1 overscroll-contain sidebar-scroll">
+            <nav className="flex-1 overflow-y-auto p-2 space-y-1 sidebar-scroll touch-pan-y" style={{ WebkitOverflowScrolling: "touch" }}>
               {navItems.map((item, index) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
@@ -310,9 +310,9 @@ export default function DashboardShell({
       </aside>
 
       {/* ------------------------------------------------------------- */}
-      {/* 4. MAIN CONTENT AREA (Independently Scrollable) */}
+      {/* 4. MAIN CONTENT AREA (Naturally scrollable on mobile, independently scrollable on desktop) */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex-1 flex flex-col min-w-0 md:h-screen md:max-h-screen md:overflow-hidden pb-20 md:pb-0">
+      <div className="flex-1 flex flex-col min-w-0 pb-24 md:pb-0 md:h-screen md:max-h-screen md:overflow-hidden">
         {/* Desktop Header Bar */}
         <header className="hidden md:flex h-16 bg-white border-b border-slate-200 px-8 items-center justify-between shrink-0 shadow-sm">
           <div>
@@ -332,8 +332,10 @@ export default function DashboardShell({
           </div>
         </header>
 
-        {/* Dynamic Page Content (Separately scrollable) */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 overscroll-contain">{children}</main>
+        {/* Dynamic Page Content */}
+        <main className="flex-1 p-4 sm:p-6 md:p-8 md:overflow-y-auto md:overscroll-contain">
+          {children}
+        </main>
       </div>
 
       {/* ------------------------------------------------------------- */}
