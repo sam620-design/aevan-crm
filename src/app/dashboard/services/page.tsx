@@ -107,9 +107,14 @@ export default function ServicesPage() {
         setCurrentUser(data.user);
         fetchServices();
         fetchAuxiliaryData();
+      } else {
+        setCurrentUser({ role: "STAFF" });
+        fetchServices();
       }
     } catch (err) {
       console.error("Session check failed:", err);
+      setCurrentUser({ role: "STAFF" });
+      fetchServices();
     }
   }
 

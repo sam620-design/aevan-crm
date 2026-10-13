@@ -45,8 +45,14 @@ export default function DashboardShell({
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isSuper = user.role === "SUPERADMIN";
+  const isStaff = user.role === "STAFF";
 
-  const navItems = [
+  const staffNavItems = [
+    { label: "Cleaning Services", href: "/dashboard/services", icon: Sparkles },
+    { label: "Sales", href: "/dashboard/sales", icon: Receipt },
+  ];
+
+  const fullNavItems = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "Cleaning Services", href: "/dashboard/services", icon: Sparkles },
     { label: "Customers", href: "/dashboard/customers", icon: Users },
@@ -79,6 +85,8 @@ export default function DashboardShell({
     },
     { label: "CRM Configuration", href: "/dashboard/settings", icon: Settings },
   ];
+
+  const navItems = isStaff ? staffNavItems : fullNavItems;
 
   return (
     <div className="min-h-screen md:h-screen md:overflow-hidden flex flex-col md:flex-row bg-slate-100 text-slate-800">
@@ -324,55 +332,87 @@ export default function DashboardShell({
       {/* ------------------------------------------------------------- */}
       {/* 5. MOBILE BOTTOM THUMB NAVIGATION (Phones only) */}
       {/* ------------------------------------------------------------- */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 h-16 bg-slate-900 border-t border-slate-800 flex items-center justify-around md:hidden px-2 shadow-2xl">
-        <Link
-          href="/dashboard"
-          className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
-            pathname === "/dashboard" ? "text-brand-400 font-bold" : "text-slate-400"
-          }`}
-        >
-          <LayoutDashboard className="w-5 h-5 mb-0.5" />
-          <span>Home</span>
-        </Link>
+      {isStaff ? (
+        <nav className="fixed bottom-0 left-0 right-0 z-40 h-16 bg-slate-900 border-t border-slate-800 flex items-center justify-around md:hidden px-4 shadow-2xl">
+          <Link
+            href="/dashboard/services"
+            className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-xs font-semibold transition-colors ${
+              pathname.startsWith("/dashboard/services") ? "text-brand-400 font-bold" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Sparkles className="w-5 h-5 mb-0.5" />
+            <span>Services</span>
+          </Link>
 
-        <Link
-          href="/dashboard/sales"
-          className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
-            pathname === "/dashboard/sales" ? "text-brand-400 font-bold" : "text-slate-400"
-          }`}
-        >
-          <Receipt className="w-5 h-5 mb-0.5" />
-          <span>Sales</span>
-        </Link>
+          <Link
+            href="/dashboard/sales"
+            className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-xs font-semibold transition-colors ${
+              pathname.startsWith("/dashboard/sales") ? "text-brand-400 font-bold" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Receipt className="w-5 h-5 mb-0.5" />
+            <span>Sales</span>
+          </Link>
 
-        <Link
-          href="/dashboard/outward"
-          className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
-            pathname === "/dashboard/outward" ? "text-brand-400 font-bold" : "text-slate-400"
-          }`}
-        >
-          <PackageMinus className="w-5 h-5 mb-0.5" />
-          <span>Outward</span>
-        </Link>
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center justify-center w-16 h-full py-1 text-xs font-medium text-slate-400 hover:text-white"
+          >
+            <Menu className="w-5 h-5 mb-0.5" />
+            <span>Menu</span>
+          </button>
+        </nav>
+      ) : (
+        <nav className="fixed bottom-0 left-0 right-0 z-40 h-16 bg-slate-900 border-t border-slate-800 flex items-center justify-around md:hidden px-2 shadow-2xl">
+          <Link
+            href="/dashboard"
+            className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
+              pathname === "/dashboard" ? "text-brand-400 font-bold" : "text-slate-400"
+            }`}
+          >
+            <LayoutDashboard className="w-5 h-5 mb-0.5" />
+            <span>Home</span>
+          </Link>
 
-        <Link
-          href="/dashboard/customers"
-          className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
-            pathname === "/dashboard/customers" ? "text-brand-400 font-bold" : "text-slate-400"
-          }`}
-        >
-          <Users className="w-5 h-5 mb-0.5" />
-          <span>Clients</span>
-        </Link>
+          <Link
+            href="/dashboard/sales"
+            className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
+              pathname === "/dashboard/sales" ? "text-brand-400 font-bold" : "text-slate-400"
+            }`}
+          >
+            <Receipt className="w-5 h-5 mb-0.5" />
+            <span>Sales</span>
+          </Link>
 
-        <button
-          onClick={() => setMobileMenuOpen(true)}
-          className="flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium text-slate-400 active:text-brand-400"
-        >
-          <Menu className="w-5 h-5 mb-0.5" />
-          <span>More</span>
-        </button>
-      </nav>
+          <Link
+            href="/dashboard/outward"
+            className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
+              pathname === "/dashboard/outward" ? "text-brand-400 font-bold" : "text-slate-400"
+            }`}
+          >
+            <PackageMinus className="w-5 h-5 mb-0.5" />
+            <span>Outward</span>
+          </Link>
+
+          <Link
+            href="/dashboard/customers"
+            className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
+              pathname === "/dashboard/customers" ? "text-brand-400 font-bold" : "text-slate-400"
+            }`}
+          >
+            <Users className="w-5 h-5 mb-0.5" />
+            <span>Clients</span>
+          </Link>
+
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium text-slate-400 active:text-brand-400"
+          >
+            <Menu className="w-5 h-5 mb-0.5" />
+            <span>More</span>
+          </button>
+        </nav>
+      )}
     </div>
   );
 }

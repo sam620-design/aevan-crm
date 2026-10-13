@@ -14,14 +14,29 @@ export async function GET() {
     if (user.role === "SUPERADMIN") {
       permissions = [{ all: true, description: "Full Root Superadmin Permissions" }];
     } else {
-      permissions = await prisma.permission.findMany({
-        where: { userId: user.id },
-        select: {
-          module: true,
-          action: true,
-          scope: true,
-        },
-      });
+      try {
+        permissions = await prisma.permission.findMany({
+          where: { userId: user.id },
+          select: {
+            module: true,
+            action: true,
+            scope: true,
+          },
+        });
+      } catch (err) {
+        console.warn("Could not query permissions from DB:", err);
+      }
+
+      // Default Staff permissions for Services and Sales
+      if (user.role === "STAFF" && permissions.length === 0) {
+        permissions = [
+          { module: "SERVICES", action: "VIEW", scope: "OWN" },
+          { module: "SERVICES", action: "CREATE", scope: "OWN" },
+          { module: "SERVICES", action: "EDIT", scope: "OWN" },
+          { module: "SALES", action: "VIEW", scope: "OWN" },
+          { module: "SALES", action: "CREATE", scope: "OWN" },
+        ];
+      }
     }
 
     return NextResponse.json({

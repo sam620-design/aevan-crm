@@ -31,7 +31,11 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
+      if (data.user?.role === "STAFF") {
+        router.push("/dashboard/services");
+      } else {
+        router.push("/dashboard");
+      }
       router.refresh();
     } catch {
       setError("Network or server error occurred. Please try again.");

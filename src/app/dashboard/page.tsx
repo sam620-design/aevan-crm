@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   ShieldAlert,
   ShoppingCart,
@@ -25,6 +26,9 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
+  if (user?.role === "STAFF") {
+    redirect("/dashboard/services");
+  }
   const isSuper = user?.role === "SUPERADMIN";
 
   // Fetch real-time live system stats
