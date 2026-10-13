@@ -46,18 +46,44 @@ export interface LogAuditEventParams {
   userAgent?: string | null;
 }
 
+export function redactSensitiveData(obj: any): any {
+  if (!obj || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(redactSensitiveData);
+  const sanitized: Record<string, any> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    const lowerKey = key.toLowerCase();
+    if (
+      lowerKey.includes("password") ||
+      lowerKey.includes("secret") ||
+      lowerKey.includes("token") ||
+      lowerKey === "authorization" ||
+      lowerKey === "apikey"
+    ) {
+      sanitized[key] = "[REDACTED]";
+    } else if (val && typeof val === "object") {
+      sanitized[key] = redactSensitiveData(val);
+    } else {
+      sanitized[key] = val;
+    }
+  }
+  return sanitized;
+}
+
 /**
  * General tamper-evident audit logging for sensitive CRUD, financial, and inventory actions.
  */
 export async function logAuditEvent(params: LogAuditEventParams) {
+  const sanitizedPrevious = params.previousState ? redactSensitiveData(JSON.parse(JSON.stringify(params.previousState))) : null;
+  const sanitizedNew = params.newState ? redactSensitiveData(JSON.parse(JSON.stringify(params.newState))) : null;
+
   return prisma.auditLog.create({
     data: {
       userId: params.userId ?? null,
       action: params.action,
       entityType: params.entityType,
       entityId: params.entityId ?? null,
-      previousState: params.previousState ? JSON.parse(JSON.stringify(params.previousState)) : null,
-      newState: params.newState ? JSON.parse(JSON.stringify(params.newState)) : null,
+      previousState: sanitizedPrevious,
+      newState: sanitizedNew,
       ipAddress: params.ipAddress ?? null,
       userAgent: params.userAgent ?? null,
     },

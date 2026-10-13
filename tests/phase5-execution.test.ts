@@ -418,8 +418,19 @@ async function runPhase5TestSuite() {
   // Test 19: Reversal Restores Invoice Balances & Advance
   // -------------------------------------------------------------
   console.log("\nTest 19: Reversal Restores Balances & Compensating Ledger Entries");
-  const testSale = { id: "sale-rev", grandTotal: 10000, paidAmount: 8000, balanceAmount: 2000, paymentStatus: SalePaymentStatus.PARTIAL };
-  const testPayment = { id: "pay-rev", amount: 10000, unallocatedAmount: 2000, status: PaymentStatus.POSTED };
+  const testSale: { id: string; grandTotal: number; paidAmount: number; balanceAmount: number; paymentStatus: SalePaymentStatus } = {
+    id: "sale-rev",
+    grandTotal: 10000,
+    paidAmount: 8000,
+    balanceAmount: 2000,
+    paymentStatus: SalePaymentStatus.PARTIAL,
+  };
+  const testPayment: { id: string; amount: number; unallocatedAmount: number; status: PaymentStatus } = {
+    id: "pay-rev",
+    amount: 10000,
+    unallocatedAmount: 2000,
+    status: PaymentStatus.POSTED,
+  };
   const testCust = { id: "cust-rev", advanceBalance: 2000 };
 
   // Reversal simulation

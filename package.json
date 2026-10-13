@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3005",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start -p 3005",
+    "postinstall": "prisma generate",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "seed": "tsx prisma/seed.ts",
@@ -15,7 +16,8 @@
     "test:phase4": "tsx tests/phase4-execution.test.ts",
     "test:phase5": "tsx tests/phase5-execution.test.ts",
     "test:phase6": "tsx tests/phase6-execution.test.ts",
-    "test": "tsx tests/phase1-security.test.ts && tsx tests/phase2-execution.test.ts && tsx tests/phase3-execution.test.ts && tsx tests/phase4-execution.test.ts && tsx tests/phase5-execution.test.ts && tsx tests/phase6-execution.test.ts"
+    "test:phase7": "tsx tests/phase7-audit.test.ts",
+    "test": "tsx tests/phase1-security.test.ts && tsx tests/phase2-execution.test.ts && tsx tests/phase3-execution.test.ts && tsx tests/phase4-execution.test.ts && tsx tests/phase5-execution.test.ts && tsx tests/phase6-execution.test.ts && tsx tests/phase7-audit.test.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.9",

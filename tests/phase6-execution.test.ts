@@ -229,7 +229,7 @@ async function runPhase6TestSuite() {
   });
   // Service layer or schema validation check:
   const line = invalidGRNNoReason.data?.lines[0];
-  const requiresRejectionReason = line && line.rejectedQty > 0 && !line.rejectionReason;
+  const requiresRejectionReason = Boolean(line && line.rejectedQty > 0 && !line.rejectionReason);
   assert(
     requiresRejectionReason,
     "4.2 Quarantined / rejected goods require explicit rejection reason"
@@ -386,8 +386,8 @@ async function runPhase6TestSuite() {
   assert(!invalidPaymentZeroAmount.success, "7.2 Supplier Payment rejects non-positive amount");
 
   // Rule: Allocation cannot cross supplier boundaries
-  const billSupplierId = "supp-101";
-  const paymentSupplierId = "supp-202";
+  const billSupplierId: string = "supp-101";
+  const paymentSupplierId: string = "supp-202";
   const isCrossSupplierAllocationBlocked = billSupplierId !== paymentSupplierId;
   assert(
     isCrossSupplierAllocationBlocked,
@@ -495,9 +495,9 @@ async function runPhase6TestSuite() {
   assert(!invalidExpenseNoAmount.success, "9.2 Expense requires strictly positive amount");
 
   // Invariant: Separation of Duties for Expenses
-  const expenseCreatorId = "staff-accounts-1";
-  const expenseApproverSame = expenseCreatorId;
-  const expenseApproverDifferent = "admin-1";
+  const expenseCreatorId: string = "staff-accounts-1";
+  const expenseApproverSame: string = expenseCreatorId;
+  const expenseApproverDifferent: string = "admin-1";
 
   const isSelfExpenseApprovalBlocked = expenseApproverSame === expenseCreatorId;
   assert(

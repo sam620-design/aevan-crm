@@ -50,30 +50,42 @@ export async function POST(request: Request) {
 
     // 1. Superadmin Root Credentials
     if (!sessionUser && cleanEmail === bootstrapEmail && password === bootstrapPassword) {
+      const dbSuper = await prisma.user.findFirst({
+        where: { role: "SUPERADMIN", isActive: true },
+        select: { id: true, email: true, name: true, role: true },
+      });
       sessionUser = {
-        id: "superadmin-root-id",
-        email: bootstrapEmail,
-        name: process.env.SUPERADMIN_NAME || "AEVAN Root Superadmin",
+        id: dbSuper?.id || "superadmin-root-id",
+        email: dbSuper?.email || bootstrapEmail,
+        name: dbSuper?.name || process.env.SUPERADMIN_NAME || "AEVAN Root Superadmin",
         role: "SUPERADMIN",
       };
     }
 
     // 2. Admin Credentials (Explicit Permissions Policy)
     if (!sessionUser && cleanEmail === "admin@aevancleaning.com" && (password === "AevanAdmin@2026" || password === bootstrapPassword)) {
+      const dbAdmin = await prisma.user.findFirst({
+        where: { role: "ADMIN", isActive: true },
+        select: { id: true, email: true, name: true, role: true },
+      });
       sessionUser = {
-        id: "demo-admin-1",
-        email: "admin@aevancleaning.com",
-        name: "Priya Sharma (Operations Admin)",
+        id: dbAdmin?.id || "demo-admin-1",
+        email: dbAdmin?.email || "admin@aevancleaning.com",
+        name: dbAdmin?.name || "Operations Admin",
         role: "ADMIN",
       };
     }
 
     // 3. Staff Credentials (Zero Implicit Permissions)
     if (!sessionUser && cleanEmail === "staff@aevancleaning.com" && (password === "AevanStaff@2026" || password === bootstrapPassword)) {
+      const dbStaff = await prisma.user.findFirst({
+        where: { role: "STAFF", isActive: true },
+        select: { id: true, email: true, name: true, role: true },
+      });
       sessionUser = {
-        id: "demo-staff-1",
-        email: "staff@aevancleaning.com",
-        name: "Rahul Kumar (Field Staff)",
+        id: dbStaff?.id || "demo-staff-1",
+        email: dbStaff?.email || "staff@aevancleaning.com",
+        name: dbStaff?.name || "Field Operations Staff",
         role: "STAFF",
       };
     }

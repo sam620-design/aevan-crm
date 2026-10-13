@@ -73,13 +73,13 @@ export default function DashboardShell({
       label: "Permissions & Users",
       href: "/dashboard/permissions",
       icon: ShieldAlert,
-      badge: isSuper ? "Root" : "Restricted",
+      badge: isSuper ? "Root Master" : "Restricted",
     },
     { label: "CRM Configuration", href: "/dashboard/settings", icon: Settings },
   ];
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-slate-100 text-slate-800">
+    <div className="min-h-screen md:h-screen md:overflow-hidden flex flex-col md:flex-row bg-slate-100 text-slate-800">
       {/* ------------------------------------------------------------- */}
       {/* 1. MOBILE TOP APP BAR (Phones only) */}
       {/* ------------------------------------------------------------- */}
@@ -130,16 +130,16 @@ export default function DashboardShell({
           />
 
           {/* Drawer Content */}
-          <div className="relative w-4/5 max-w-xs bg-slate-900 text-slate-300 flex flex-col h-full shadow-2xl z-10">
+          <div className="relative w-4/5 max-w-xs bg-slate-900 text-slate-300 flex flex-col h-full shadow-2xl z-10 overflow-hidden">
             {/* Drawer Header */}
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-brand-800 flex items-center justify-center text-brand-300 font-bold border border-brand-500/30">
                   <Building2 className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-sm">AEVAN Cleaning</h3>
-                  <p className="text-[10px] text-brand-400">All 15 Modules</p>
+                  <p className="text-[10px] text-brand-400">All Modules</p>
                 </div>
               </div>
               <button
@@ -151,13 +151,13 @@ export default function DashboardShell({
             </div>
 
             {/* User Profile in Drawer */}
-            <div className="px-4 py-3 bg-slate-950/60 border-b border-slate-800/80">
+            <div className="px-4 py-3 bg-slate-950/60 border-b border-slate-800/80 shrink-0">
               <p className="text-xs font-semibold text-white truncate">{user.name}</p>
               <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
             </div>
 
-            {/* Drawer Nav Links */}
-            <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+            {/* Drawer Nav Links (Separately scrollable) */}
+            <nav className="flex-1 overflow-y-auto p-2 space-y-1 overscroll-contain sidebar-scroll">
               {navItems.map((item, index) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
@@ -191,7 +191,7 @@ export default function DashboardShell({
             </nav>
 
             {/* Logout in Drawer */}
-            <div className="p-3 border-t border-slate-800">
+            <div className="p-3 border-t border-slate-800 shrink-0">
               <form action="/api/auth/logout" method="POST">
                 <button
                   type="submit"
@@ -207,10 +207,11 @@ export default function DashboardShell({
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* 3. DESKTOP SIDEBAR (Hidden on Phones) */}
+      {/* 3. DESKTOP SIDEBAR (Separately Scrollable Options Menu) */}
       {/* ------------------------------------------------------------- */}
-      <aside className="hidden md:flex w-64 lg:w-72 bg-slate-900 border-r border-slate-800 flex-col shrink-0 text-slate-300">
-        <div className="p-5 border-b border-slate-800 flex items-center gap-3">
+      <aside className="hidden md:flex w-64 lg:w-72 h-screen max-h-screen bg-slate-900 border-r border-slate-800 flex-col shrink-0 text-slate-300 sticky top-0 overflow-hidden select-none">
+        {/* Brand / Logo Header (Fixed at top of sidebar) */}
+        <div className="p-5 border-b border-slate-800 flex items-center gap-3 shrink-0">
           <div className="w-10 h-10 rounded-xl bg-brand-800 flex items-center justify-center text-brand-300 shrink-0 font-bold border border-brand-500/30">
             <Building2 className="w-5 h-5" />
           </div>
@@ -222,7 +223,8 @@ export default function DashboardShell({
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+        {/* Separately Scrollable Options Navigation Menu */}
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1 overscroll-contain sidebar-scroll">
           {navItems.map((item, index) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
@@ -258,7 +260,8 @@ export default function DashboardShell({
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-800 bg-slate-950/50">
+        {/* User Profile & Sign Out Footer (Fixed at bottom of sidebar) */}
+        <div className="p-4 border-t border-slate-800 bg-slate-950/70 shrink-0">
           <div className="flex items-center justify-between mb-3">
             <div className="overflow-hidden">
               <p className="text-sm font-semibold text-white truncate">{user.name}</p>
@@ -290,9 +293,9 @@ export default function DashboardShell({
       </aside>
 
       {/* ------------------------------------------------------------- */}
-      {/* 4. MAIN CONTENT AREA */}
+      {/* 4. MAIN CONTENT AREA (Independently Scrollable) */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex-1 flex flex-col min-w-0 pb-20 md:pb-8">
+      <div className="flex-1 flex flex-col min-w-0 md:h-screen md:max-h-screen md:overflow-hidden pb-20 md:pb-0">
         {/* Desktop Header Bar */}
         <header className="hidden md:flex h-16 bg-white border-b border-slate-200 px-8 items-center justify-between shrink-0 shadow-sm">
           <div>
@@ -303,17 +306,17 @@ export default function DashboardShell({
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-xs text-slate-500">Security Access Level</p>
-              <p className="text-xs font-bold text-brand-800 uppercase tracking-wide">
+              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide">
                 {user.role === "SUPERADMIN"
-                  ? "Root Superadmin (Full Policy Control)"
+                  ? "Root Superadmin • 100% Unlocked (Zero Restrictions)"
                   : `${user.role} (Explicit Permissions Only)`}
               </p>
             </div>
           </div>
         </header>
 
-        {/* Dynamic Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">{children}</main>
+        {/* Dynamic Page Content (Separately scrollable) */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 overscroll-contain">{children}</main>
       </div>
 
       {/* ------------------------------------------------------------- */}

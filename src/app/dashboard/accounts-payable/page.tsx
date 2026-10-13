@@ -39,7 +39,7 @@ interface AgingSupplier {
 }
 
 interface AccountsPayableReport {
-  summary: {
+  summary?: {
     current: number;
     days1To30: number;
     days31To60: number;
@@ -47,7 +47,19 @@ interface AccountsPayableReport {
     days90Plus: number;
     totalPayable: number;
   };
-  suppliers: AgingSupplier[];
+  aging?: {
+    current: number;
+    days1_30: number;
+    days31_60: number;
+    days61_90: number;
+    days90Plus: number;
+  };
+  totals?: {
+    totalPayables: number;
+    billCount: number;
+    supplierCount: number;
+  };
+  suppliers?: AgingSupplier[];
 }
 
 export default function AccountsPayablePage() {
@@ -128,42 +140,42 @@ export default function AccountsPayablePage() {
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <span className="text-[11px] font-medium text-slate-500">Current (Not Due)</span>
             <p className="text-base font-bold text-slate-800 mt-1">
-              ₹{report.summary.current.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              ₹{(report.summary?.current ?? report.aging?.current ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </p>
           </div>
 
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <span className="text-[11px] font-medium text-blue-600">1 - 30 Days</span>
             <p className="text-base font-bold text-blue-700 mt-1">
-              ₹{report.summary.days1To30.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              ₹{(report.summary?.days1To30 ?? report.aging?.days1_30 ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </p>
           </div>
 
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <span className="text-[11px] font-medium text-amber-600">31 - 60 Days</span>
             <p className="text-base font-bold text-amber-700 mt-1">
-              ₹{report.summary.days31To60.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              ₹{(report.summary?.days31To60 ?? report.aging?.days31_60 ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </p>
           </div>
 
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <span className="text-[11px] font-medium text-orange-600">61 - 90 Days</span>
             <p className="text-base font-bold text-orange-700 mt-1">
-              ₹{report.summary.days61To90.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              ₹{(report.summary?.days61To90 ?? report.aging?.days61_90 ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </p>
           </div>
 
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <span className="text-[11px] font-medium text-red-600">90+ Days</span>
             <p className="text-base font-bold text-red-700 mt-1">
-              ₹{report.summary.days90Plus.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              ₹{(report.summary?.days90Plus ?? report.aging?.days90Plus ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </p>
           </div>
 
           <div className="bg-white p-4 rounded-xl border border-brand-300 shadow-sm bg-brand-50/30">
             <span className="text-[11px] font-bold text-brand-900">Total Payable</span>
             <p className="text-base font-bold text-brand-800 mt-1">
-              ₹{report.summary.totalPayable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              ₹{(report.summary?.totalPayable ?? report.totals?.totalPayables ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </p>
           </div>
         </div>
@@ -172,7 +184,7 @@ export default function AccountsPayablePage() {
       {/* Supplier Breakdown */}
       {loading ? (
         <div className="p-12 text-center text-slate-400">Loading accounts payable report...</div>
-      ) : !report || report.suppliers.length === 0 ? (
+      ) : !report || (report.suppliers || []).length === 0 ? (
         <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 space-y-3">
           <Wallet className="w-12 h-12 text-slate-300 mx-auto" />
           <h3 className="font-semibold text-slate-800">Zero accounts payable</h3>
@@ -180,7 +192,7 @@ export default function AccountsPayablePage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {report.suppliers.map((s) => (
+          {(report.suppliers || []).map((s) => (
             <div
               key={s.supplierId}
               className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4"
@@ -251,10 +263,10 @@ export default function AccountsPayablePage() {
               {/* Unpaid bills list */}
               <div className="space-y-1.5">
                 <h4 className="text-[11px] font-bold text-slate-700 uppercase">
-                  Unpaid Invoices ({s.unpaidBills.length})
+                  Unpaid Invoices ({(s.unpaidBills || []).length})
                 </h4>
                 <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
-                  {s.unpaidBills.map((b) => (
+                  {(s.unpaidBills || []).map((b) => (
                     <div
                       key={b.id}
                       className="p-2.5 text-xs flex justify-between items-center bg-white"

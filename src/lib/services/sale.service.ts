@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { SessionUser } from "@/lib/auth";
 import { hasPermission, isSuperadmin } from "@/lib/permissions";
-import { ModuleName, ActionName, DataScope, Prisma, SalePaymentStatus } from "@prisma/client";
+import { ModuleName, ActionName, DataScope, Prisma, SalePaymentStatus, LedgerEntryType } from "@prisma/client";
 import { logAuditEvent } from "@/lib/audit";
 import { calculateOrderTotals } from "./order.service";
 
@@ -404,14 +404,13 @@ export async function finalizeSale(user: SessionUser, saleId: string, data?: { n
       });
     }
 
-    // Read and atomic increment
-    const allocatedNumber = config.nextInvoiceNumber;
-    const invoiceNumber = `${config.invoicePrefix}${String(allocatedNumber).padStart(4, "0")}`;
-
-    await tx.companyConfig.update({
+    const updatedConfig = await tx.companyConfig.update({
       where: { id: "default" },
-      data: { nextInvoiceNumber: allocatedNumber + 1 },
+      data: { nextInvoiceNumber: { increment: 1 } },
     });
+    const allocatedNumber = updatedConfig.nextInvoiceNumber - 1;
+    const invoicePrefix = updatedConfig.invoicePrefix || "INV-";
+    const invoiceNumber = `${invoicePrefix}${String(allocatedNumber).padStart(4, "0")}`;
 
     // Verify invoice number uniqueness
     const existingInvoice = await tx.sale.findUnique({ where: { invoiceNumber } });
@@ -432,6 +431,29 @@ export async function finalizeSale(user: SessionUser, saleId: string, data?: { n
         customer: true,
         items: { include: { product: true } },
         finalizedBy: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    // Append to CustomerLedger (Debit represents invoice amount owed by customer)
+    const lastLedger = await tx.customerLedger.findFirst({
+      where: { customerId: sale.customerId },
+      orderBy: { createdAt: "desc" },
+    });
+    const prevBalance = lastLedger ? Number(lastLedger.balance) : 0;
+    const invoiceDebit = Number(sale.grandTotal);
+    const newLedgerBalance = prevBalance + invoiceDebit;
+
+    await tx.customerLedger.create({
+      data: {
+        customerId: sale.customerId,
+        entryType: LedgerEntryType.SALE_INVOICE,
+        referenceId: sale.id,
+        referenceNumber: invoiceNumber,
+        debit: invoiceDebit,
+        credit: 0,
+        balance: newLedgerBalance,
+        description: `Tax Invoice ${invoiceNumber} for Sale ${sale.saleNumber}`,
+        createdById: user.id,
       },
     });
 

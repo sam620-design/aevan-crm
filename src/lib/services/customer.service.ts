@@ -151,9 +151,60 @@ export async function createCustomer(user: SessionUser, data: any) {
     throw new Error("FORBIDDEN: You do not have permission to create customers.");
   }
 
-  // Generate unique Customer Code (CUST-1001, CUST-1002, ...)
+  // Generate concurrency-safe unique Customer Code (CUST-1001, CUST-1002, ...)
   const count = await prisma.customer.count();
-  const customerCode = `CUST-${(1001 + count).toString()}`;
+  let codeNum = 1001 + count;
+  let customerCode = `CUST-${codeNum.toString().padStart(4, "0")}`;
+  while (await prisma.customer.findUnique({ where: { customerCode } })) {
+    codeNum++;
+    customerCode = `CUST-${codeNum.toString().padStart(4, "0")}`;
+  }
+
+  // Defensively verify createdById against DB to prevent foreign key violations
+  let validCreatedById: string | null = null;
+  if (user?.id) {
+    const existingUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { id: true },
+    });
+    if (existingUser) {
+      validCreatedById = existingUser.id;
+    } else if (user.email) {
+      const byEmail = await prisma.user.findUnique({
+        where: { email: user.email.toLowerCase().trim() },
+        select: { id: true },
+      });
+      if (byEmail) validCreatedById = byEmail.id;
+    }
+  }
+
+  if (!validCreatedById && isSuperadmin(user)) {
+    const superUser = await prisma.user.findFirst({
+      where: { role: "SUPERADMIN", isActive: true },
+      select: { id: true },
+    });
+    if (superUser) validCreatedById = superUser.id;
+  }
+
+  // Validate optional assignedToId
+  let validAssignedToId: string | null = null;
+  if (data.assignedToId) {
+    const assignee = await prisma.user.findUnique({
+      where: { id: data.assignedToId },
+      select: { id: true },
+    });
+    if (assignee) validAssignedToId = assignee.id;
+  }
+
+  // Validate optional priceListId
+  let validPriceListId: string | null = null;
+  if (data.priceListId) {
+    const pl = await prisma.customerPriceList.findUnique({
+      where: { id: data.priceListId },
+      select: { id: true },
+    });
+    if (pl) validPriceListId = pl.id;
+  }
 
   const customer = await prisma.customer.create({
     data: {
@@ -168,22 +219,24 @@ export async function createCustomer(user: SessionUser, data: any) {
       customerType: data.customerType || "RETAIL",
       gstin: data.gstin ? data.gstin.trim().toUpperCase() : null,
       notes: data.notes || null,
-      priceListId: data.priceListId || null,
-      assignedToId: data.assignedToId || null,
-      createdById: user.id,
+      priceListId: validPriceListId,
+      assignedToId: validAssignedToId,
+      createdById: validCreatedById,
     },
     include: {
       priceList: true,
     },
   });
 
-  await logAuditEvent({
-    userId: user.id,
-    action: "CREATE_CUSTOMER",
-    entityType: "CUSTOMER",
-    entityId: customer.id,
-    newState: customer,
-  });
+  if (validCreatedById) {
+    await logAuditEvent({
+      userId: validCreatedById,
+      action: "CREATE_CUSTOMER",
+      entityType: "CUSTOMER",
+      entityId: customer.id,
+      newState: customer,
+    });
+  }
 
   return customer;
 }

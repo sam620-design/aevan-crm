@@ -135,9 +135,18 @@ export default function PurchaseOrdersPage() {
         prodRes.json(),
       ]);
 
-      if (suppRes.ok) setSuppliers(suppData.suppliers || []);
-      if (locRes.ok) setLocations(locData.locations || locData || []);
-      if (prodRes.ok) setProducts(prodData.products || prodData || []);
+      if (suppRes.ok) setSuppliers(Array.isArray(suppData?.suppliers) ? suppData.suppliers : Array.isArray(suppData) ? suppData : []);
+      if (locRes.ok) setLocations(Array.isArray(locData?.locations) ? locData.locations : Array.isArray(locData) ? locData : []);
+      if (prodRes.ok) {
+        const list = Array.isArray(prodData?.products)
+          ? prodData.products
+          : Array.isArray(prodData?.data)
+          ? prodData.data
+          : Array.isArray(prodData)
+          ? prodData
+          : [];
+        setProducts(list);
+      }
     } catch (e) {
       console.error("Failed to load metadata", e);
     }
@@ -558,7 +567,7 @@ export default function PurchaseOrdersPage() {
                         className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white"
                       >
                         <option value="">-- Select Product --</option>
-                        {products.map((p) => (
+                        {(Array.isArray(products) ? products : []).map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name} ({p.sku})
                           </option>

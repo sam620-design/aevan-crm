@@ -12,7 +12,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     const endDate = searchParams.get("endDate") || undefined;
 
     const ledger = await getSupplierLedger(user, params.id, { startDate, endDate });
-    return NextResponse.json({ success: true, ledger });
+    return NextResponse.json({ success: true, ...ledger, ledger });
   } catch (error: any) {
     const isForbidden = error.message?.startsWith("FORBIDDEN");
     return NextResponse.json(

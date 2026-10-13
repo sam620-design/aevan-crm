@@ -1549,6 +1549,14 @@ export async function getAccountsPayableReport(
       supplierCount: suppliers.length,
     },
     aging: agingBuckets,
+    summary: {
+      current: agingBuckets.current,
+      days1To30: agingBuckets.days1_30,
+      days31To60: agingBuckets.days31_60,
+      days61To90: agingBuckets.days61_90,
+      days90Plus: agingBuckets.days90Plus,
+      totalPayable: totalPayables,
+    },
     supplierRankings: suppliers.map((s) => ({
       id: s.id,
       name: s.name,
@@ -1559,6 +1567,8 @@ export async function getAccountsPayableReport(
       id: b.id,
       billNumber: b.billNumber,
       supplierInvoiceNumber: b.supplierInvoiceNumber,
+      supplierId: b.supplierId,
+      supplierCode: b.supplier.supplierCode,
       supplierName: b.supplier.name,
       billDate: b.billDate,
       dueDate: b.dueDate,

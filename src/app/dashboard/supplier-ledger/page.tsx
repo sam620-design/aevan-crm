@@ -91,7 +91,7 @@ export default function SupplierLedgerPage() {
       const res = await fetch(`/api/suppliers/${selectedSupplierId}/ledger?${params.toString()}`);
       const data = await res.json();
       if (res.ok) {
-        setLedgerData(data);
+        setLedgerData(data.ledger || data);
       } else {
         setError(data.error || "Failed to load supplier ledger");
       }
@@ -193,7 +193,7 @@ export default function SupplierLedgerPage() {
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <span className="text-xs font-medium text-slate-500">Total Billed / Invoiced (Credits)</span>
             <p className="text-xl font-bold text-blue-700 mt-1">
-              ₹{ledgerData.summary.totalCredits.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              ₹{(ledgerData.summary?.totalCredits ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5">Increases liability to vendor</p>
           </div>
@@ -201,7 +201,7 @@ export default function SupplierLedgerPage() {
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <span className="text-xs font-medium text-slate-500">Total Paid & Returned (Debits)</span>
             <p className="text-xl font-bold text-emerald-700 mt-1">
-              ₹{ledgerData.summary.totalDebits.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              ₹{(ledgerData.summary?.totalDebits ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5">Disbursements & returned goods</p>
           </div>
@@ -210,19 +210,19 @@ export default function SupplierLedgerPage() {
             <span className="text-xs font-medium text-slate-500">Current Outstanding Balance</span>
             <p
               className={`text-xl font-bold mt-1 ${
-                ledgerData.summary.closingBalance > 0
+                (ledgerData.summary?.closingBalance ?? 0) > 0
                   ? "text-red-700"
-                  : ledgerData.summary.closingBalance < 0
+                  : (ledgerData.summary?.closingBalance ?? 0) < 0
                   ? "text-amber-600"
                   : "text-slate-700"
               }`}
             >
-              ₹{ledgerData.summary.closingBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              ₹{(ledgerData.summary?.closingBalance ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              {ledgerData.summary.closingBalance > 0
+              {(ledgerData.summary?.closingBalance ?? 0) > 0
                 ? "Net payable amount owed to vendor"
-                : ledgerData.summary.closingBalance < 0
+                : (ledgerData.summary?.closingBalance ?? 0) < 0
                 ? "Advance balance held with vendor"
                 : "Account fully settled"}
             </p>

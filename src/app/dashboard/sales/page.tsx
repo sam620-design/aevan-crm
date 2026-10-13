@@ -12,12 +12,19 @@ import {
   Lock,
   X,
   Building,
+  UserPlus,
+  Phone,
+  Check,
 } from "lucide-react";
 
 interface Customer {
   id: string;
+  customerCode?: string;
   name: string;
+  contactPerson?: string | null;
   phone: string;
+  customerType?: string;
+  billingAddress?: string | null;
   gstin?: string | null;
 }
 
@@ -97,6 +104,19 @@ export default function SalesPage() {
     Array<{ productId: string; quantity: number; unitPrice: number; discount: number; taxRate: number }>
   >([{ productId: "", quantity: 1, unitPrice: 0, discount: 0, taxRate: 18.0 }]);
 
+  // Customer search & inline creation state
+  const [customerSearchQuery, setCustomerSearchQuery] = useState("");
+  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
+  const [newCustName, setNewCustName] = useState("");
+  const [newCustContactPerson, setNewCustContactPerson] = useState("");
+  const [newCustPhone, setNewCustPhone] = useState("");
+  const [newCustType, setNewCustType] = useState("RETAIL");
+  const [newCustGstin, setNewCustGstin] = useState("");
+  const [newCustAddress, setNewCustAddress] = useState("");
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [custCreatedSuccess, setCustCreatedSuccess] = useState<string | null>(null);
+
   useEffect(() => {
     fetchInitialData();
   }, []);
@@ -106,14 +126,20 @@ export default function SalesPage() {
     try {
       const [saleRes, custRes, prodRes] = await Promise.all([
         fetch("/api/sales").then((r) => (r.ok ? r.json() : { data: [] })),
-        fetch("/api/customers").then((r) => (r.ok ? r.json() : { data: [] })),
+        fetch("/api/customers?limit=200").then((r) => (r.ok ? r.json() : { data: [] })),
         fetch("/api/products").then((r) => (r.ok ? r.json() : { products: [] })),
       ]);
 
       setSales(saleRes.data || []);
-      setCustomers(custRes.data || []);
+      const loadedCusts: Customer[] = custRes.data || [];
+      setCustomers(loadedCusts);
       setProducts(prodRes.products || []);
-      if (custRes.data?.length > 0) setSelectedCustomerId(custRes.data[0].id);
+      if (loadedCusts.length > 0 && !selectedCustomerId) {
+        setSelectedCustomerId(loadedCusts[0].id);
+        if (loadedCusts[0].billingAddress) {
+          setBillingAddress(loadedCusts[0].billingAddress);
+        }
+      }
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -121,10 +147,77 @@ export default function SalesPage() {
     }
   }
 
+  // Quick Customer Creation in the same form
+  async function handleQuickCreateCustomer(): Promise<string | null> {
+    if (!newCustName.trim()) {
+      setErrorMsg("Please enter Customer / Company Name.");
+      return null;
+    }
+    const digits = newCustPhone.replace(/\D/g, "");
+    if (digits.length !== 10) {
+      setErrorMsg("Contact No. must be exactly 10 digits.");
+      return null;
+    }
+
+    setSavingCustomer(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newCustName.trim(),
+          contactPerson: newCustContactPerson.trim() || null,
+          phone: `+91${digits}`,
+          customerType: newCustType,
+          billingAddress: newCustAddress.trim() || null,
+          gstin: newCustGstin.trim().toUpperCase() || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create customer");
+
+      const created: Customer = data.customer;
+      setCustomers((prev) => [created, ...prev]);
+      setSelectedCustomerId(created.id);
+      if (created.billingAddress) {
+        setBillingAddress(created.billingAddress);
+      }
+      setIsCreatingCustomer(false);
+      setCustCreatedSuccess(`Created & selected: ${created.name} (${created.customerCode || ""})`);
+      setNewCustName("");
+      setNewCustContactPerson("");
+      setNewCustPhone("");
+      setNewCustGstin("");
+      setNewCustAddress("");
+      return created.id;
+    } catch (err: any) {
+      setErrorMsg(err.message);
+      return null;
+    } finally {
+      setSavingCustomer(false);
+    }
+  }
+
   async function handleCreateDirectSale(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
+
+    let targetCustomerId = selectedCustomerId;
+
+    // If currently creating a new customer inline, complete customer creation first
+    if (isCreatingCustomer) {
+      const createdId = await handleQuickCreateCustomer();
+      if (!createdId) return; // Validation or creation failed
+      targetCustomerId = createdId;
+    }
+
+    if (!targetCustomerId) {
+      setErrorMsg("Please select or create a customer for this direct sale.");
+      return;
+    }
 
     const validItems = formItems.filter((i) => i.productId && i.quantity > 0);
     if (validItems.length === 0) {
@@ -137,7 +230,7 @@ export default function SalesPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customerId: selectedCustomerId,
+          customerId: targetCustomerId,
           billingAddress: billingAddress || null,
           deliveryCharges: Number(deliveryCharges) || 0,
           notes: notes || null,
@@ -148,8 +241,10 @@ export default function SalesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create direct sale");
 
-      setSuccessMsg(`Direct Sale "${data.sale.saleNumber}" created. Review and finalize to issue the invoice.`);
+      setSuccessMsg(`Direct Sale "${data.sale.saleNumber}" created successfully. Review and finalize to issue invoice.`);
       setShowCreateModal(false);
+      setIsCreatingCustomer(false);
+      setCustomerSearchQuery("");
       setFormItems([{ productId: "", quantity: 1, unitPrice: 0, discount: 0, taxRate: 18.0 }]);
       fetchInitialData();
     } catch (err: any) {
@@ -202,6 +297,22 @@ export default function SalesPage() {
       (filterFinalized === "DRAFT" && !s.isFinalized);
 
     return matchSearch && matchFinalized;
+  });
+
+  const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
+
+  const filteredCustomers = customers.filter((c) => {
+    if (!customerSearchQuery.trim()) return true;
+    const q = customerSearchQuery.toLowerCase().trim();
+    const phoneClean = c.phone.replace(/[^0-9]/g, "");
+    const qClean = q.replace(/[^0-9]/g, "");
+
+    const matchesPhone = c.phone.toLowerCase().includes(q) || (qClean.length > 0 && phoneClean.includes(qClean));
+    const matchesName = c.name.toLowerCase().includes(q);
+    const matchesContact = c.contactPerson ? c.contactPerson.toLowerCase().includes(q) : false;
+    const matchesCode = c.customerCode ? c.customerCode.toLowerCase().includes(q) : false;
+
+    return matchesPhone || matchesName || matchesContact || matchesCode;
   });
 
   return (
@@ -388,20 +499,363 @@ export default function SalesPage() {
             </div>
 
             <form onSubmit={handleCreateDirectSale} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Select Customer</label>
-                <select
-                  value={selectedCustomerId}
-                  onChange={(e) => setSelectedCustomerId(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-                  required
-                >
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.phone})
-                    </option>
-                  ))}
-                </select>
+              {/* Customer Selection & Inline Creation Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-slate-700 flex items-center gap-1">
+                    <span>Customer / Client</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingCustomer(!isCreatingCustomer);
+                      setIsCustomerDropdownOpen(false);
+                      if (!isCreatingCustomer && customerSearchQuery) {
+                        setNewCustName(customerSearchQuery);
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg transition-all border shadow-sm ${
+                      isCreatingCustomer
+                        ? "bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200"
+                        : "bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100 hover:border-brand-300"
+                    }`}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{isCreatingCustomer ? "Select Existing" : "+ New Customer"}</span>
+                  </button>
+                </div>
+
+                {custCreatedSuccess && (
+                  <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-[11px] flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      {custCreatedSuccess}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCustCreatedSuccess(null)}
+                      className="text-emerald-700 p-0.5 hover:text-emerald-900"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+
+                {/* MODE A: Inline New Customer Registration */}
+                {isCreatingCustomer ? (
+                  <div className="p-3.5 bg-gradient-to-b from-brand-50/70 to-slate-50 border border-brand-200 rounded-2xl space-y-3 shadow-inner">
+                    <div className="flex items-center justify-between border-b border-brand-100 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-6 h-6 rounded-full bg-brand-700 text-white flex items-center justify-center text-xs font-bold">
+                          +
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-xs">Register New Customer</h4>
+                          <p className="text-[10px] text-slate-500">
+                            Saved to directory &amp; linked directly to this sale
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingCustomer(false)}
+                        className="text-slate-400 hover:text-slate-600 p-1"
+                        title="Cancel"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Customer / Company Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustName}
+                          onChange={(e) => setNewCustName(e.target.value)}
+                          placeholder="e.g. Nalanda Deep Clean / Balram Hardware"
+                          className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Contact No. <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-brand-600 focus-within:ring-1 focus-within:ring-brand-600 overflow-hidden">
+                          <div className="flex items-center gap-1 px-2.5 py-2 bg-slate-100 border-r border-slate-200 text-slate-700 font-bold select-none text-[11px] shrink-0">
+                            <span>🇮🇳</span>
+                            <span>+91</span>
+                          </div>
+                          <input
+                            type="tel"
+                            inputMode="numeric"
+                            pattern="[0-9]{10}"
+                            maxLength={10}
+                            value={newCustPhone}
+                            onChange={(e) => {
+                              let val = e.target.value.replace(/\D/g, "");
+                              if (val.length === 12 && val.startsWith("91")) {
+                                val = val.slice(2);
+                              } else if (val.length === 11 && val.startsWith("0")) {
+                                val = val.slice(1);
+                              }
+                              setNewCustPhone(val.slice(0, 10));
+                            }}
+                            placeholder="9876543210"
+                            className="w-full py-2 px-2.5 bg-transparent text-xs tracking-wider font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none"
+                          />
+                          <div className="pr-2 shrink-0">
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                newCustPhone.length === 10
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : newCustPhone.length > 0
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "text-slate-400"
+                              }`}
+                            >
+                              {newCustPhone.length}/10
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Prefix +91 default. Takes 10 digits.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Contact Person (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustContactPerson}
+                          onChange={(e) => setNewCustContactPerson(e.target.value)}
+                          placeholder="e.g. Rajesh Kumar"
+                          className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Customer Tier
+                        </label>
+                        <select
+                          value={newCustType}
+                          onChange={(e) => setNewCustType(e.target.value)}
+                          className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600"
+                        >
+                          <option value="DISTRIBUTOR">DISTRIBUTOR</option>
+                          <option value="WHOLESALE">WHOLESALE</option>
+                          <option value="CORPORATE">CORPORATE</option>
+                          <option value="RETAIL">RETAIL</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          GSTIN (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustGstin}
+                          onChange={(e) => setNewCustGstin(e.target.value.toUpperCase())}
+                          placeholder="e.g. 10XXXXX0000X1Z5"
+                          className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs uppercase font-mono focus:outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Billing Address (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustAddress}
+                          onChange={(e) => {
+                            setNewCustAddress(e.target.value);
+                            if (!billingAddress) setBillingAddress(e.target.value);
+                          }}
+                          placeholder="e.g. Bihar Sharif, Nalanda, Bihar"
+                          className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-brand-100">
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingCustomer(false)}
+                        className="text-[11px] text-slate-500 hover:text-slate-700 font-medium"
+                      >
+                        Cancel (Select Existing)
+                      </button>
+                      <button
+                        type="button"
+                        disabled={savingCustomer}
+                        onClick={handleQuickCreateCustomer}
+                        className="px-3 py-1.5 bg-brand-700 hover:bg-brand-600 text-white rounded-xl text-xs font-bold shadow-sm disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                      >
+                        {savingCustomer ? "Saving..." : "✓ Save & Select Customer"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* MODE B: Search by Phone, Name, or Company Name */
+                  <div className="space-y-2">
+                    {selectedCustomer && !isCustomerDropdownOpen ? (
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-start justify-between gap-2 hover:border-slate-300 transition-colors">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900 text-xs">
+                              {selectedCustomer.name}
+                            </span>
+                            {selectedCustomer.customerCode && (
+                              <span className="text-[10px] font-mono bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-bold">
+                                {selectedCustomer.customerCode}
+                              </span>
+                            )}
+                            {selectedCustomer.customerType && (
+                              <span className="text-[9px] font-semibold bg-brand-100 text-brand-800 px-1.5 py-0.5 rounded">
+                                {selectedCustomer.customerType}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600">
+                            <span className="flex items-center gap-1 font-semibold text-brand-700">
+                              <Phone className="w-3 h-3" />
+                              {selectedCustomer.phone}
+                            </span>
+                            {selectedCustomer.contactPerson && (
+                              <span className="text-slate-500">
+                                Contact: {selectedCustomer.contactPerson}
+                              </span>
+                            )}
+                            {selectedCustomer.gstin && (
+                              <span className="font-mono text-slate-500">
+                                GSTIN: {selectedCustomer.gstin}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCustomerDropdownOpen(true);
+                            setCustomerSearchQuery("");
+                          }}
+                          className="text-[11px] font-bold text-brand-700 hover:text-brand-800 bg-white border border-slate-200 px-2.5 py-1 rounded-lg shrink-0 shadow-sm"
+                        >
+                          Change
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+                          <input
+                            type="text"
+                            autoFocus={isCustomerDropdownOpen}
+                            value={customerSearchQuery}
+                            onFocus={() => setIsCustomerDropdownOpen(true)}
+                            onChange={(e) => {
+                              setCustomerSearchQuery(e.target.value);
+                              setIsCustomerDropdownOpen(true);
+                            }}
+                            placeholder="Search by phone no., customer name, or company name..."
+                            className="w-full pl-9 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600 focus:bg-white focus:ring-1 focus:ring-brand-600 transition-all"
+                          />
+                          {customerSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setCustomerSearchQuery("")}
+                              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Dropdown Options */}
+                        <div className="mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg divide-y divide-slate-100 z-20">
+                          {filteredCustomers.length === 0 ? (
+                            <div className="p-3 text-center text-xs text-slate-500 space-y-1">
+                              <p>No customer found matching &quot;{customerSearchQuery}&quot;</p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsCreatingCustomer(true);
+                                  setIsCustomerDropdownOpen(false);
+                                  setNewCustName(customerSearchQuery);
+                                }}
+                                className="text-brand-700 font-bold hover:underline inline-flex items-center gap-1 text-[11px]"
+                              >
+                                <Plus className="w-3 h-3" />
+                                Click here to create &quot;{customerSearchQuery}&quot; as new customer
+                              </button>
+                            </div>
+                          ) : (
+                            filteredCustomers.slice(0, 30).map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedCustomerId(c.id);
+                                  setIsCustomerDropdownOpen(false);
+                                  setCustomerSearchQuery("");
+                                  if (c.billingAddress) {
+                                    setBillingAddress(c.billingAddress);
+                                  }
+                                }}
+                                className={`w-full text-left p-2.5 hover:bg-brand-50/80 transition-colors flex items-center justify-between gap-2 ${
+                                  selectedCustomerId === c.id ? "bg-brand-50" : ""
+                                }`}
+                              >
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-slate-900 text-xs">
+                                      {c.name}
+                                    </span>
+                                    {c.customerCode && (
+                                      <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1 py-0.2 rounded">
+                                        {c.customerCode}
+                                      </span>
+                                    )}
+                                    {c.customerType && (
+                                      <span className="text-[9px] font-semibold text-slate-500">
+                                        • {c.customerType}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                    <span className="font-medium text-brand-700">
+                                      📞 {c.phone}
+                                    </span>
+                                    {c.contactPerson && (
+                                      <span>• 👤 {c.contactPerson}</span>
+                                    )}
+                                    {c.billingAddress && (
+                                      <span className="truncate max-w-[180px]">• 📍 {c.billingAddress}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                {selectedCustomerId === c.id && (
+                                  <Check className="w-4 h-4 text-brand-700 shrink-0" />
+                                )}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
