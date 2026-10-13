@@ -35,6 +35,13 @@ import {
 } from "lucide-react";
 import { SessionUser } from "@/lib/auth";
 
+interface NavItem {
+  label: string;
+  href: string;
+  icon: any;
+  badge?: string;
+}
+
 export default function DashboardShell({
   user,
   children,
@@ -47,12 +54,12 @@ export default function DashboardShell({
   const isSuper = user.role === "SUPERADMIN";
   const isStaff = user.role === "STAFF";
 
-  const staffNavItems = [
+  const staffNavItems: NavItem[] = [
     { label: "Cleaning Services", href: "/dashboard/services", icon: Sparkles },
     { label: "Sales", href: "/dashboard/sales", icon: Receipt },
   ];
 
-  const fullNavItems = [
+  const fullNavItems: NavItem[] = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "Cleaning Services", href: "/dashboard/services", icon: Sparkles },
     { label: "Customers", href: "/dashboard/customers", icon: Users },
