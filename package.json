@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3005",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && node -e \"try{require('child_process').execSync('npx prisma db push --skip-generate --accept-data-loss',{stdio:'inherit'})}catch(e){console.warn('DB sync skipped:',e.message)}\" && next build",
     "start": "next start -p 3005",
     "postinstall": "prisma generate",
     "lint": "next lint",

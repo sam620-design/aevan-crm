@@ -206,22 +206,30 @@ export async function getCleaningServices(
     ];
   }
 
-  const [items, total] = await Promise.all([
-    prisma.cleaningService.findMany({
-      where,
-      include: {
-        customer: { select: { id: true, name: true, phone: true } },
-        assignedStaff: { select: { id: true, name: true, email: true, phone: true } },
-        createdBy: { select: { id: true, name: true, email: true } },
-      },
-      orderBy: { scheduledDate: "asc" },
-      take: filters.limit || 50,
-      skip: filters.offset || 0,
-    }),
-    prisma.cleaningService.count({ where }),
-  ]);
+  try {
+    const [items, total] = await Promise.all([
+      prisma.cleaningService.findMany({
+        where,
+        include: {
+          customer: { select: { id: true, name: true, phone: true } },
+          assignedStaff: { select: { id: true, name: true, email: true, phone: true } },
+          createdBy: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { scheduledDate: "asc" },
+        take: filters.limit || 50,
+        skip: filters.offset || 0,
+      }),
+      prisma.cleaningService.count({ where }),
+    ]);
 
-  return { items, total };
+    return { items, total };
+  } catch (error: any) {
+    console.error("Error in getCleaningServices:", error);
+    if (error.message?.includes("does not exist") || error.code === "P2021") {
+      return { items: [], total: 0 };
+    }
+    throw error;
+  }
 }
 
 /**

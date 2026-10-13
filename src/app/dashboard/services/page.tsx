@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import DashboardShell from "@/components/DashboardShell";
 import {
   Sparkles,
   Plus,
@@ -305,8 +304,7 @@ export default function ServicesPage() {
   }
 
   return (
-    <DashboardShell user={currentUser}>
-      <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
         {/* Top Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div>
@@ -957,6 +955,5 @@ export default function ServicesPage() {
           </div>
         )}
       </div>
-    </DashboardShell>
   );
 }
