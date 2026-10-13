@@ -182,6 +182,7 @@ export default function DashboardShell({
                   <Link
                     key={item.href}
                     href={item.href}
+                    prefetch={false}
                     onClick={() => setMobileMenuOpen(false)}
                     className={`flex items-center justify-between px-3 py-3 rounded-xl text-xs font-medium transition-colors ${
                       isActive
@@ -249,6 +250,7 @@ export default function DashboardShell({
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-colors group ${
                   isActive
                     ? "bg-brand-900/60 text-white font-semibold border border-brand-700/50"
@@ -345,6 +347,7 @@ export default function DashboardShell({
         <nav className="fixed bottom-0 left-0 right-0 z-40 h-16 bg-slate-900 border-t border-slate-800 flex items-center justify-around md:hidden px-4 shadow-2xl">
           <Link
             href="/dashboard/services"
+            prefetch={false}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-xs font-semibold transition-colors ${
               pathname.startsWith("/dashboard/services") ? "text-brand-400 font-bold" : "text-slate-400 hover:text-white"
             }`}
@@ -355,6 +358,7 @@ export default function DashboardShell({
 
           <Link
             href="/dashboard/sales"
+            prefetch={false}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-xs font-semibold transition-colors ${
               pathname.startsWith("/dashboard/sales") ? "text-brand-400 font-bold" : "text-slate-400 hover:text-white"
             }`}
@@ -375,6 +379,7 @@ export default function DashboardShell({
         <nav className="fixed bottom-0 left-0 right-0 z-40 h-16 bg-slate-900 border-t border-slate-800 flex items-center justify-around md:hidden px-2 shadow-2xl">
           <Link
             href="/dashboard"
+            prefetch={false}
             className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
               pathname === "/dashboard" ? "text-brand-400 font-bold" : "text-slate-400"
             }`}
@@ -385,6 +390,7 @@ export default function DashboardShell({
 
           <Link
             href="/dashboard/sales"
+            prefetch={false}
             className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
               pathname === "/dashboard/sales" ? "text-brand-400 font-bold" : "text-slate-400"
             }`}
@@ -395,6 +401,7 @@ export default function DashboardShell({
 
           <Link
             href="/dashboard/outward"
+            prefetch={false}
             className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
               pathname === "/dashboard/outward" ? "text-brand-400 font-bold" : "text-slate-400"
             }`}
@@ -405,6 +412,7 @@ export default function DashboardShell({
 
           <Link
             href="/dashboard/customers"
+            prefetch={false}
             className={`flex flex-col items-center justify-center w-14 h-full py-1 text-[10px] font-medium transition-colors ${
               pathname === "/dashboard/customers" ? "text-brand-400 font-bold" : "text-slate-400"
             }`}

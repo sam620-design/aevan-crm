@@ -96,6 +96,7 @@ export default function ServicesPage() {
   const [followUpDate, setFollowUpDate] = useState("");
 
   useEffect(() => {
+    fetchServices();
     fetchSession();
   }, []);
 
@@ -105,19 +106,16 @@ export default function ServicesPage() {
       if (res.ok) {
         const data = await res.json();
         setCurrentUser(data.user);
-        fetchServices();
         fetchAuxiliaryData(data.user);
       } else {
         const fallback = { role: "STAFF" };
         setCurrentUser(fallback);
-        fetchServices();
         fetchAuxiliaryData(fallback);
       }
     } catch (err) {
       console.error("Session check failed:", err);
       const fallback = { role: "STAFF" };
       setCurrentUser(fallback);
-      fetchServices();
       fetchAuxiliaryData(fallback);
     }
   }

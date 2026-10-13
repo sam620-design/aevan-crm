@@ -22,29 +22,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-export const dynamic = "force-dynamic";
+import { unstable_cache } from "next/cache";
 
-export default async function DashboardPage() {
-  const user = await getCurrentUser();
-  if (user?.role === "STAFF") {
-    redirect("/dashboard/services");
-  }
-  const isSuper = user?.role === "SUPERADMIN";
-
-  // Fetch real-time live system stats
-  let stats = {
-    customerCount: 0,
-    supplierCount: 0,
-    productCount: 0,
-    orderCount: 0,
-    saleCount: 0,
-    outwardCount: 0,
-    totalSalesAmount: 0,
-    totalPayablesAmount: 0,
-    totalStockUnits: 0,
-  };
-
-  try {
+const getLiveDashboardStats = unstable_cache(
+  async () => {
     const [
       custCount,
       suppCount,
@@ -67,7 +48,7 @@ export default async function DashboardPage() {
       prisma.stockBalance.aggregate({ _sum: { quantity: true } }),
     ]);
 
-    stats = {
+    return {
       customerCount: custCount,
       supplierCount: suppCount,
       productCount: prodCount,
@@ -78,6 +59,33 @@ export default async function DashboardPage() {
       totalPayablesAmount: Number(suppAgg._sum.payableBalance || 0),
       totalStockUnits: Number(stockAgg._sum.quantity || 0),
     };
+  },
+  ["dashboard-live-stats"],
+  { revalidate: 10 }
+);
+
+export default async function DashboardPage() {
+  const user = await getCurrentUser();
+  if (user?.role === "STAFF") {
+    redirect("/dashboard/services");
+  }
+  const isSuper = user?.role === "SUPERADMIN";
+
+  // Fetch live system stats (cached for 10s to keep navigation instant)
+  let stats = {
+    customerCount: 0,
+    supplierCount: 0,
+    productCount: 0,
+    orderCount: 0,
+    saleCount: 0,
+    outwardCount: 0,
+    totalSalesAmount: 0,
+    totalPayablesAmount: 0,
+    totalStockUnits: 0,
+  };
+
+  try {
+    stats = await getLiveDashboardStats();
   } catch (e) {
     console.error("Dashboard stats fetch error:", e);
   }
