@@ -55,8 +55,8 @@ export default function DashboardShell({
   const isStaff = user.role === "STAFF";
 
   const staffNavItems: NavItem[] = [
-    { label: "Cleaning Services", href: "/dashboard/services", icon: Sparkles },
-    { label: "Sales", href: "/dashboard/sales", icon: Receipt },
+    { label: "Cleaning Services", href: "/dashboard/services", icon: Sparkles, badge: undefined },
+    { label: "Sales", href: "/dashboard/sales", icon: Receipt, badge: undefined },
   ];
 
   const fullNavItems: NavItem[] = [
@@ -195,9 +195,9 @@ export default function DashboardShell({
                         {index + 1}. {item.label}
                       </span>
                     </div>
-                    {item.badge ? (
+                    {(item as any).badge ? (
                       <span className="text-[9px] px-1.5 py-0.5 rounded bg-brand-950 text-brand-300 border border-brand-800">
-                        {item.badge}
+                        {(item as any).badge}
                       </span>
                     ) : (
                       <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
@@ -261,7 +261,7 @@ export default function DashboardShell({
                     {index + 1}. {item.label}
                   </span>
                 </div>
-                {item.badge && (
+                {(item as any).badge && (
                   <span
                     className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
                       isSuper
@@ -269,7 +269,7 @@ export default function DashboardShell({
                         : "bg-slate-800 text-slate-400"
                     }`}
                   >
-                    {item.badge}
+                    {(item as any).badge}
                   </span>
                 )}
               </Link>
