@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get("limit") || "20", 10);
 
     const result = await getExpenses(user, { search, categoryId, status, page, limit });
-    return NextResponse.json({ success: true, ...result });
+    return NextResponse.json({ success: true, ...result, expenses: result.items });
   } catch (error: any) {
     const isForbidden = error.message?.startsWith("FORBIDDEN");
     return NextResponse.json(

@@ -1761,3 +1761,138 @@ export async function rejectExpense(user: SessionUser, expenseId: string, reason
 
   return updated;
 }
+
+export async function getExpenseById(user: SessionUser, id: string) {
+  const canView =
+    (await hasPermission(user, ModuleName.EXPENSES, ActionName.VIEW)) || isSuperadmin(user);
+  if (!canView) throw new Error("FORBIDDEN: You do not have permission to view expenses.");
+
+  const expense = await prisma.expense.findUnique({
+    where: { id },
+    include: {
+      category: true,
+      supplier: { select: { id: true, name: true, phone: true } },
+      location: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true, role: true } },
+      approvedBy: { select: { id: true, name: true } },
+    },
+  });
+
+  if (!expense) throw new Error("Expense not found.");
+  return expense;
+}
+
+export async function updateExpense(
+  user: SessionUser,
+  id: string,
+  data: {
+    categoryId?: string;
+    title?: string;
+    description?: string | null;
+    amount?: number;
+    tax?: number;
+    expenseDate?: string;
+    paymentMethod?: PaymentMethod;
+    referenceNumber?: string | null;
+    supplierId?: string | null;
+    locationId?: string | null;
+  }
+) {
+  const canEdit =
+    (await hasPermission(user, ModuleName.EXPENSES, ActionName.EDIT)) || isSuperadmin(user);
+  if (!canEdit) throw new Error("FORBIDDEN: You do not have permission to edit expenses.");
+
+  const existing = await prisma.expense.findUnique({ where: { id } });
+  if (!existing) throw new Error("Expense not found.");
+
+  if (existing.status === ExpenseStatus.APPROVED && !isSuperadmin(user)) {
+    throw new Error("Cannot edit an approved expense without Superadmin authority.");
+  }
+
+  const amt = data.amount !== undefined ? round2(data.amount) : Number(existing.amount);
+  const tax = data.tax !== undefined ? round2(data.tax) : Number(existing.tax);
+  const totalAmount = round2(amt + tax);
+
+  const updated = await prisma.expense.update({
+    where: { id },
+    data: {
+      ...(data.categoryId ? { categoryId: data.categoryId } : {}),
+      ...(data.title ? { title: data.title.trim() } : {}),
+      ...(data.description !== undefined ? { description: data.description?.trim() || null } : {}),
+      amount: amt,
+      tax,
+      totalAmount,
+      ...(data.expenseDate ? { expenseDate: new Date(data.expenseDate) } : {}),
+      ...(data.paymentMethod ? { paymentMethod: data.paymentMethod } : {}),
+      ...(data.referenceNumber !== undefined ? { referenceNumber: data.referenceNumber || null } : {}),
+      ...(data.supplierId !== undefined ? { supplierId: data.supplierId || null } : {}),
+      ...(data.locationId !== undefined ? { locationId: data.locationId || null } : {}),
+    },
+    include: {
+      category: true,
+      supplier: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true } },
+    },
+  });
+
+  await logAuditEvent({
+    userId: user.id,
+    action: "UPDATE_EXPENSE",
+    entityType: "EXPENSE",
+    entityId: id,
+    previousState: existing,
+    newState: updated,
+  });
+
+  return updated;
+}
+
+export async function deleteExpense(user: SessionUser, id: string) {
+  const canDelete =
+    (await hasPermission(user, ModuleName.EXPENSES, ActionName.DELETE)) || isSuperadmin(user);
+  if (!canDelete) throw new Error("FORBIDDEN: You do not have permission to delete expenses.");
+
+  const existing = await prisma.expense.findUnique({ where: { id } });
+  if (!existing) throw new Error("Expense not found.");
+
+  if (existing.status === ExpenseStatus.APPROVED && !isSuperadmin(user)) {
+    throw new Error("Cannot delete an approved expense. Final approved financial records are immutable.");
+  }
+
+  await prisma.expense.delete({ where: { id } });
+
+  await logAuditEvent({
+    userId: user.id,
+    action: "DELETE_EXPENSE",
+    entityType: "EXPENSE",
+    entityId: id,
+    previousState: existing,
+    newState: null,
+  });
+
+  return { success: true, message: `Expense voucher ${existing.expenseNumber} deleted successfully.` };
+}
+
+export async function createExpenseCategory(
+  user: SessionUser,
+  data: { name: string; code?: string; description?: string }
+) {
+  const canCreate =
+    (await hasPermission(user, ModuleName.EXPENSES, ActionName.CREATE)) || isSuperadmin(user);
+  if (!canCreate) throw new Error("FORBIDDEN: You do not have permission to create expense categories.");
+
+  const name = data.name.trim();
+  const code = (data.code || `EXP-${name.substring(0, 3).toUpperCase()}`).trim();
+
+  const category = await prisma.expenseCategory.create({
+    data: {
+      name,
+      code,
+      description: data.description?.trim() || null,
+      isActive: true,
+    },
+  });
+
+  return category;
+}
+
