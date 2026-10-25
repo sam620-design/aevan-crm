@@ -303,3 +303,36 @@ export async function updateCustomer(user: SessionUser, id: string, data: any) {
 
   return updated;
 }
+
+export async function deleteCustomer(user: SessionUser, id: string) {
+  const canDelete =
+    (await hasPermission(user, ModuleName.CUSTOMERS, ActionName.DELETE)) ||
+    isSuperadmin(user);
+  if (!canDelete) {
+    throw new Error("FORBIDDEN: You do not have permission to delete customers.");
+  }
+
+  const existing = await prisma.customer.findUnique({
+    where: { id },
+  });
+
+  if (!existing || !existing.isActive) {
+    throw new Error("Customer not found");
+  }
+
+  const updated = await prisma.customer.update({
+    where: { id },
+    data: { isActive: false },
+  });
+
+  await logAuditEvent({
+    userId: user.id,
+    action: "DELETE_CUSTOMER",
+    entityType: "CUSTOMER",
+    entityId: id,
+    previousState: existing,
+    newState: { isActive: false },
+  });
+
+  return { success: true, message: `Customer "${existing.name}" removed successfully.` };
+}

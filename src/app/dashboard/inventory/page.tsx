@@ -16,6 +16,9 @@ import {
   ShieldCheck,
   DollarSign,
   Layers,
+  Eye,
+  Edit2,
+  Trash2,
 } from "lucide-react";
 
 interface StockBalance {
@@ -77,6 +80,24 @@ export default function InventoryPage() {
   const [locCode, setLocCode] = useState("");
   const [locAddress, setLocAddress] = useState("");
   const [savingLocation, setSavingLocation] = useState(false);
+
+  // Detail Modal
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+
+  // Edit Product Modal
+  const [editProduct, setEditProduct] = useState<Product | null>(null);
+  const [editProdName, setEditProdName] = useState("");
+  const [editProdCategory, setEditProdCategory] = useState("FORMULATIONS");
+  const [editProdUnit, setEditProdUnit] = useState("CAN_5L");
+  const [editProdBasePrice, setEditProdBasePrice] = useState("");
+  const [editProdCostPrice, setEditProdCostPrice] = useState("");
+  const [editProdTaxRate, setEditProdTaxRate] = useState("18");
+  const [editProdMinAlert, setEditProdMinAlert] = useState("10");
+  const [updatingProduct, setUpdatingProduct] = useState(false);
+
+  // Delete Confirm
+  const [deleteProductItem, setDeleteProductItem] = useState<Product | null>(null);
+  const [deletingProduct, setDeletingProduct] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -177,6 +198,71 @@ export default function InventoryPage() {
       setSavingLocation(false);
     }
   }
+
+  const handleOpenEditProduct = (item: Product) => {
+    setEditProduct(item);
+    setEditProdName(item.name || "");
+    setEditProdCategory(item.category || "FORMULATIONS");
+    setEditProdUnit(item.unit || "CAN_5L");
+    setEditProdBasePrice(String(item.basePrice || ""));
+    setEditProdCostPrice(item.costPrice !== null && item.costPrice !== undefined ? String(item.costPrice) : "");
+    setEditProdTaxRate(String(item.taxRate || "18"));
+    setEditProdMinAlert(String(item.minStockAlert || "10"));
+  };
+
+  const handleUpdateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editProduct) return;
+    setUpdatingProduct(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/products/${editProduct.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editProdName,
+          category: editProdCategory,
+          unit: editProdUnit,
+          basePrice: parseFloat(editProdBasePrice) || 0,
+          costPrice: editProdCostPrice ? parseFloat(editProdCostPrice) : null,
+          taxRate: parseFloat(editProdTaxRate) || 18,
+          minStockAlert: parseInt(editProdMinAlert) || 10,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update product");
+      setMessage({ type: "success", text: `Product "${editProdName}" updated successfully!` });
+      setEditProduct(null);
+      fetchData();
+    } catch (err: any) {
+      setMessage({ type: "error", text: err.message });
+    } finally {
+      setUpdatingProduct(false);
+    }
+  };
+
+  const handleDeleteProduct = async () => {
+    if (!deleteProductItem) return;
+    setDeletingProduct(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/products/${deleteProductItem.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete product");
+      setMessage({ type: "success", text: data.message || "Product deleted or deactivated." });
+      setDeleteProductItem(null);
+      if (detailProduct?.id === deleteProductItem.id) {
+        setDetailProduct(null);
+      }
+      fetchData();
+    } catch (err: any) {
+      setMessage({ type: "error", text: err.message });
+    } finally {
+      setDeletingProduct(false);
+    }
+  };
 
   const filtered = products.filter((p) => {
     const term = search.toLowerCase();
@@ -490,6 +576,38 @@ export default function InventoryPage() {
                     ))}
                   </div>
                 )}
+
+                {/* Actions Bar */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <span className="text-[10px] text-slate-400">
+                    Tax: {item.taxRate}% | Min Alert: {item.minStockAlert}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setDetailProduct(item)}
+                      className="px-2.5 py-1 text-xs text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold flex items-center gap-1 transition-colors"
+                      title="View details"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Details
+                    </button>
+                    <button
+                      onClick={() => handleOpenEditProduct(item)}
+                      className="px-2.5 py-1 text-xs text-brand-700 hover:text-brand-900 bg-brand-50 hover:bg-brand-100 rounded-lg font-semibold flex items-center gap-1 transition-colors"
+                      title="Edit product"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => setDeleteProductItem(item)}
+                      className="px-2 py-1 text-xs text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg font-semibold flex items-center gap-1 transition-colors"
+                      title="Delete / Deactivate product"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
             );
           })
@@ -694,6 +812,316 @@ export default function InventoryPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* PRODUCT DETAIL MODAL */}
+      {detailProduct && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl my-8">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-brand-50 text-brand-800 rounded-xl">
+                  <Package className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">{detailProduct.name}</h3>
+                  <span className="text-xs font-mono font-bold text-slate-500">{detailProduct.sku}</span>
+                </div>
+              </div>
+              <button onClick={() => setDetailProduct(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <div>
+                  <span className="text-slate-400 block font-semibold">Category</span>
+                  <span className="font-bold text-slate-800">{detailProduct.category}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block font-semibold">Unit Type</span>
+                  <span className="font-bold text-slate-800">{detailProduct.unit}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="p-2.5 border border-slate-100 rounded-xl bg-white shadow-xs">
+                  <span className="text-slate-400 block font-semibold">Base Price</span>
+                  <span className="font-bold text-slate-900">
+                    ₹{Number(detailProduct.basePrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="p-2.5 border border-slate-100 rounded-xl bg-white shadow-xs">
+                  <span className="text-slate-400 block font-semibold">GST Tax Rate</span>
+                  <span className="font-bold text-slate-900">{detailProduct.taxRate}%</span>
+                </div>
+                <div className="p-2.5 border border-slate-100 rounded-xl bg-white shadow-xs">
+                  <span className="text-slate-400 block font-semibold">Min Alert</span>
+                  <span className="font-bold text-amber-700">{detailProduct.minStockAlert} units</span>
+                </div>
+              </div>
+
+              {marginsVisible && detailProduct.costPrice !== null && detailProduct.costPrice !== undefined && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <span className="text-emerald-800 font-bold block">Profit Margin Analysis</span>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <div>
+                      <span className="text-emerald-600 block text-[11px]">Cost Price:</span>
+                      <strong className="text-emerald-950 font-mono">
+                        ₹{Number(detailProduct.costPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-emerald-600 block text-[11px]">Gross Margin:</span>
+                      <strong className="text-emerald-950 font-mono">
+                        ₹{(Number(detailProduct.basePrice) - Number(detailProduct.costPrice)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <span className="text-slate-500 font-bold block mb-1.5">Warehouse Stock Distribution:</span>
+                {detailProduct.stockBalances && detailProduct.stockBalances.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {detailProduct.stockBalances.map((b) => (
+                      <div
+                        key={b.id}
+                        className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-100"
+                      >
+                        <span className="font-medium text-slate-700 flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                          {b.location?.name} ({b.location?.code})
+                        </span>
+                        <span className="font-mono font-bold text-slate-900">
+                          {b.quantity} {detailProduct.unit}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-slate-400 italic">No facility stock records allocated yet.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const p = detailProduct;
+                    setDetailProduct(null);
+                    handleOpenEditProduct(p);
+                  }}
+                  className="px-3.5 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-800 rounded-xl font-bold flex items-center gap-1.5 transition-colors text-xs"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Edit SKU
+                </button>
+                <button
+                  onClick={() => {
+                    const p = detailProduct;
+                    setDetailProduct(null);
+                    setDeleteProductItem(p);
+                  }}
+                  className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold flex items-center gap-1.5 transition-colors text-xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </button>
+              </div>
+              <button
+                onClick={() => setDetailProduct(null)}
+                className="px-4 py-1.5 bg-slate-900 text-white rounded-xl font-semibold text-xs"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PRODUCT MODAL */}
+      {editProduct && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-brand-50 text-brand-800 rounded-xl">
+                  <Edit2 className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Edit Product: {editProduct.sku}</h3>
+                  <p className="text-xs text-slate-500">Update pricing, tax, alert threshold, or classification</p>
+                </div>
+              </div>
+              <button onClick={() => setEditProduct(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateProduct} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Product Formulation Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editProdName}
+                  onChange={(e) => setEditProdName(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Category</label>
+                  <select
+                    value={editProdCategory}
+                    onChange={(e) => setEditProdCategory(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600 font-semibold"
+                  >
+                    <option value="FORMULATIONS">Chemical Formulations</option>
+                    <option value="EQUIPMENT">Machinery & Tools</option>
+                    <option value="CONSUMABLES">Consumables / Towels</option>
+                    <option value="SERVICES">Service Packs</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Packaging / Unit</label>
+                  <select
+                    value={editProdUnit}
+                    onChange={(e) => setEditProdUnit(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600 font-semibold"
+                  >
+                    <option value="CAN_5L">5-Liter Jerry Can (CAN_5L)</option>
+                    <option value="BOTTLE_1L">1-Liter Spray Bottle (BOTTLE_1L)</option>
+                    <option value="DRUM_50L">50-Liter Industrial Drum (DRUM_50L)</option>
+                    <option value="PCS">Individual Piece (PCS)</option>
+                    <option value="PACK">Bulk Pack (PACK)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Base Selling Price (₹) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={editProdBasePrice}
+                    onChange={(e) => setEditProdBasePrice(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-brand-600"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Cost Price (₹) <span className="text-emerald-700 font-bold">(Superadmin)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editProdCostPrice}
+                    onChange={(e) => setEditProdCostPrice(e.target.value)}
+                    placeholder="Optional cost"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-brand-600"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">GST Tax Rate (%)</label>
+                  <select
+                    value={editProdTaxRate}
+                    onChange={(e) => setEditProdTaxRate(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600"
+                  >
+                    <option value="0">0% (Exempt)</option>
+                    <option value="5">5% (Essential Consumables)</option>
+                    <option value="12">12% (Standard)</option>
+                    <option value="18">18% (Standard Chemicals)</option>
+                    <option value="28">28% (Heavy Machinery)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Low Stock Alert Min Threshold</label>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={editProdMinAlert}
+                    onChange={(e) => setEditProdMinAlert(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditProduct(null)}
+                  className="px-4 py-2 border rounded-xl font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingProduct}
+                  className="px-5 py-2 bg-brand-800 hover:bg-brand-900 text-white rounded-xl font-bold shadow disabled:opacity-50"
+                >
+                  {updatingProduct ? "Saving..." : "Save Product Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE / DEACTIVATE CONFIRMATION MODAL */}
+      {deleteProductItem && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <span className="p-3 bg-rose-50 text-rose-600 rounded-2xl">
+                <Trash2 className="w-6 h-6" />
+              </span>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Delete Product?</h3>
+                <p className="text-xs text-slate-500">
+                  {deleteProductItem.name} ({deleteProductItem.sku})
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-rose-50/50 border border-rose-100 p-3 rounded-xl">
+              Are you sure you want to delete this product? If the product has historical sales or purchase orders, it will be safely deactivated to preserve your financial ledgers.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setDeleteProductItem(null)}
+                disabled={deletingProduct}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteProduct}
+                disabled={deletingProduct}
+                className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow disabled:opacity-50"
+              >
+                {deletingProduct ? "Processing..." : "Confirm Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}

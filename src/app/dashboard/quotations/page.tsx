@@ -13,6 +13,9 @@ import {
   Send,
   X,
   Calendar,
+  Eye,
+  Edit2,
+  Trash2,
 } from "lucide-react";
 
 interface Customer {
@@ -78,6 +81,19 @@ export default function QuotationsPage() {
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
   const [showReopenModal, setShowReopenModal] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
+
+  // Detail Modal State
+  const [detailQuotation, setDetailQuotation] = useState<Quotation | null>(null);
+
+  // Edit Modal State
+  const [editQuotation, setEditQuotation] = useState<Quotation | null>(null);
+  const [editValidUntil, setEditValidUntil] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [updatingQuotation, setUpdatingQuotation] = useState(false);
+
+  // Delete Confirm State
+  const [deleteConfirmQuotation, setDeleteConfirmQuotation] = useState<Quotation | null>(null);
+  const [deletingQuotation, setDeletingQuotation] = useState(false);
 
   useEffect(() => {
     fetchInitialData();
@@ -204,6 +220,63 @@ export default function QuotationsPage() {
       setErrorMsg(err.message);
     }
   }
+
+  const handleOpenEditQuotation = (q: Quotation) => {
+    setEditQuotation(q);
+    setEditValidUntil(q.validUntil ? new Date(q.validUntil).toISOString().split("T")[0] : "");
+    setEditNotes((q as any).notes || "");
+  };
+
+  const handleUpdateQuotation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editQuotation) return;
+    setUpdatingQuotation(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`/api/quotations/${editQuotation.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          validUntil: editValidUntil || null,
+          notes: editNotes || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update quotation");
+
+      setSuccessMsg(`Quotation "${editQuotation.quotationNumber}" updated successfully.`);
+      setEditQuotation(null);
+      fetchInitialData();
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setUpdatingQuotation(false);
+    }
+  };
+
+  const handleDeleteQuotation = async () => {
+    if (!deleteConfirmQuotation) return;
+    setDeletingQuotation(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`/api/quotations/${deleteConfirmQuotation.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete quotation");
+
+      setSuccessMsg(data.message || `Quotation "${deleteConfirmQuotation.quotationNumber}" deleted successfully.`);
+      setDeleteConfirmQuotation(null);
+      if (detailQuotation?.id === deleteConfirmQuotation.id) {
+        setDetailQuotation(null);
+      }
+      fetchInitialData();
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setDeletingQuotation(false);
+    }
+  };
 
   const filteredQuotations = quotations.filter((q) => {
     const matchSearch =
@@ -351,14 +424,37 @@ export default function QuotationsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-xs text-slate-400">
-                  Created:{" "}
-                  {new Date(q.quotationDate).toLocaleDateString("en-IN", {
-                    day: "2-digit",
-                    month: "short",
-                  })}
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setDetailQuotation(q)}
+                    className="px-2.5 py-1.5 text-xs text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold flex items-center gap-1 transition-colors"
+                    title="View details"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    Details
+                  </button>
+
+                  {q.status !== "CONVERTED" && !q.resultingSale && (
+                    <>
+                      <button
+                        onClick={() => handleOpenEditQuotation(q)}
+                        className="px-2.5 py-1.5 text-xs text-brand-700 hover:text-brand-900 bg-brand-50 hover:bg-brand-100 rounded-lg font-semibold flex items-center gap-1 transition-colors"
+                        title="Edit quotation"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirmQuotation(q)}
+                        className="px-2 py-1.5 text-xs text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg font-semibold flex items-center gap-1 transition-colors"
+                        title="Delete quotation"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
 
                 <div className="flex items-center gap-2">
                   {q.status === "DRAFT" && (
@@ -632,6 +728,326 @@ export default function QuotationsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* QUOTATION DETAIL MODAL */}
+      {detailQuotation && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-xl my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-indigo-50 text-indigo-800 rounded-xl">
+                  <FileText className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                    <span>Quotation: {detailQuotation.quotationNumber}</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        detailQuotation.status === "CONVERTED"
+                          ? "bg-purple-100 text-purple-800"
+                          : detailQuotation.status === "ACCEPTED"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : detailQuotation.status === "SENT"
+                          ? "bg-blue-100 text-blue-800"
+                          : detailQuotation.status === "REJECTED"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-slate-100 text-slate-700"
+                      }`}
+                    >
+                      {detailQuotation.status}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Created: {new Date(detailQuotation.quotationDate).toLocaleDateString("en-IN", { dateStyle: "long" })}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setDetailQuotation(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Customer & Validity */}
+            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl text-xs border border-slate-100">
+              <div>
+                <span className="text-slate-400 block font-semibold">Client Name</span>
+                <span className="font-bold text-slate-900 text-sm">{detailQuotation.customer?.name}</span>
+                <span className="text-slate-600 block mt-0.5">{detailQuotation.customer?.phone}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block font-semibold">Valid Until</span>
+                <span className="font-semibold text-slate-800">
+                  {new Date(detailQuotation.validUntil).toLocaleDateString("en-IN", { dateStyle: "medium" })}
+                </span>
+                {(detailQuotation as any).notes && (
+                  <span className="text-slate-500 block mt-1 italic">
+                    Notes: {(detailQuotation as any).notes}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Items Table */}
+            <div>
+              <span className="text-xs font-bold text-slate-700 block mb-2">Estimate Line Items:</span>
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold">
+                    <tr>
+                      <th className="p-2.5">Item Name</th>
+                      <th className="p-2.5 text-center">Qty</th>
+                      <th className="p-2.5 text-right">Unit Price</th>
+                      <th className="p-2.5 text-right">Tax</th>
+                      <th className="p-2.5 text-right">Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {detailQuotation.items?.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50/50">
+                        <td className="p-2.5">
+                          <span className="font-bold text-slate-900 block">{item.product?.name}</span>
+                          <span className="text-[10px] font-mono text-slate-400">{item.product?.sku}</span>
+                        </td>
+                        <td className="p-2.5 text-center font-bold text-slate-800">
+                          {item.quantity} {item.product?.unit || "pcs"}
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-slate-700">
+                          ₹{Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-slate-500">{item.taxRate}%</td>
+                        <td className="p-2.5 text-right font-mono font-bold text-slate-900">
+                          ₹{Number(item.lineTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Financial Summary */}
+            <div className="bg-slate-50 p-3.5 rounded-xl space-y-1.5 text-xs border border-slate-100">
+              <div className="flex justify-between text-slate-600">
+                <span>Subtotal:</span>
+                <span className="font-mono">₹{Number(detailQuotation.subtotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              {Number(detailQuotation.discount) > 0 && (
+                <div className="flex justify-between text-emerald-700 font-semibold">
+                  <span>Discount:</span>
+                  <span className="font-mono">-₹{Number(detailQuotation.discount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-slate-600">
+                <span>GST Tax:</span>
+                <span className="font-mono">₹{Number(detailQuotation.tax).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              {Number(detailQuotation.deliveryCharges) > 0 && (
+                <div className="flex justify-between text-slate-600">
+                  <span>Delivery Charges:</span>
+                  <span className="font-mono">₹{Number(detailQuotation.deliveryCharges).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm font-bold text-slate-900 pt-2 border-t border-slate-200">
+                <span>Total Estimated Value:</span>
+                <span className="font-mono text-indigo-950">
+                  ₹{Number(detailQuotation.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            {/* Resulting Sale Link */}
+            {detailQuotation.resultingSale && (
+              <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between text-xs text-purple-900">
+                <span className="font-semibold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-purple-700" />
+                  Converted to Sale: {detailQuotation.resultingSale.saleNumber}
+                </span>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-3 border-t">
+              <div className="flex items-center gap-2">
+                {detailQuotation.status !== "CONVERTED" && !detailQuotation.resultingSale && (
+                  <>
+                    {detailQuotation.status === "DRAFT" && (
+                      <button
+                        onClick={() => {
+                          const q = detailQuotation;
+                          setDetailQuotation(null);
+                          handleIssueQuotation(q);
+                        }}
+                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        Send to Client
+                      </button>
+                    )}
+                    {detailQuotation.status === "SENT" && (
+                      <button
+                        onClick={() => {
+                          const q = detailQuotation;
+                          setDetailQuotation(null);
+                          handleAcceptQuotation(q);
+                        }}
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Mark Accepted
+                      </button>
+                    )}
+                    {detailQuotation.status === "ACCEPTED" && (
+                      <button
+                        onClick={() => {
+                          const q = detailQuotation;
+                          setDetailQuotation(null);
+                          handleConvertToSale(q);
+                        }}
+                        className="px-3.5 py-1.5 bg-brand-700 hover:bg-brand-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                      >
+                        <ArrowRight className="w-3.5 h-3.5" />
+                        Convert to Sale
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        const q = detailQuotation;
+                        setDetailQuotation(null);
+                        handleOpenEditQuotation(q);
+                      }}
+                      className="px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        const q = detailQuotation;
+                        setDetailQuotation(null);
+                        setDeleteConfirmQuotation(q);
+                      }}
+                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete
+                    </button>
+                  </>
+                )}
+              </div>
+              <button
+                onClick={() => setDetailQuotation(null)}
+                className="px-4 py-1.5 bg-slate-900 text-white rounded-xl font-semibold text-xs"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT QUOTATION MODAL */}
+      {editQuotation && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-indigo-50 text-indigo-800 rounded-xl">
+                  <Edit2 className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-bold text-slate-900 text-base">Edit Quotation: {editQuotation.quotationNumber}</h2>
+                  <p className="text-xs text-slate-500">Client: {editQuotation.customer?.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setEditQuotation(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateQuotation} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Validity Expiration Date</label>
+                <input
+                  type="date"
+                  value={editValidUntil}
+                  onChange={(e) => setEditValidUntil(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Notes / Scope of Work</label>
+                <textarea
+                  rows={3}
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="Terms, payment schedules, warranty period..."
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditQuotation(null)}
+                  className="px-4 py-2 border rounded-xl font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingQuotation}
+                  className="px-5 py-2 bg-brand-800 hover:bg-brand-900 text-white rounded-xl font-bold shadow disabled:opacity-50"
+                >
+                  {updatingQuotation ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE QUOTATION MODAL */}
+      {deleteConfirmQuotation && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center gap-3">
+              <span className="p-3 bg-rose-50 text-rose-600 rounded-2xl">
+                <Trash2 className="w-6 h-6" />
+              </span>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Delete Quotation?</h3>
+                <p className="text-xs text-slate-500">
+                  {deleteConfirmQuotation.quotationNumber} ({deleteConfirmQuotation.customer?.name})
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-rose-50/50 border border-rose-100 p-3 rounded-xl">
+              Are you sure you want to delete this quotation estimate? This action cannot be undone and will be logged in the system audit trail.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmQuotation(null)}
+                disabled={deletingQuotation}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteQuotation}
+                disabled={deletingQuotation}
+                className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow disabled:opacity-50"
+              >
+                {deletingQuotation ? "Deleting..." : "Confirm Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}

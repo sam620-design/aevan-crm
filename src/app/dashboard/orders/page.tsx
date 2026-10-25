@@ -11,6 +11,11 @@ import {
   FileCheck,
   X,
   Package,
+  Eye,
+  Edit2,
+  Trash2,
+  Building,
+  Phone,
 } from "lucide-react";
 
 interface Customer {
@@ -73,6 +78,20 @@ export default function OrdersPage() {
   const [formItems, setFormItems] = useState<
     Array<{ productId: string; quantity: number; unitPrice: number; discount: number; taxRate: number }>
   >([{ productId: "", quantity: 1, unitPrice: 0, discount: 0, taxRate: 18.0 }]);
+
+  // Detail Modal State
+  const [detailOrder, setDetailOrder] = useState<Order | null>(null);
+
+  // Edit Modal State
+  const [editOrder, setEditOrder] = useState<Order | null>(null);
+  const [editDeliveryAddress, setEditDeliveryAddress] = useState("");
+  const [editDeliveryDate, setEditDeliveryDate] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [updatingOrder, setUpdatingOrder] = useState(false);
+
+  // Delete Confirm State
+  const [deleteConfirmOrder, setDeleteConfirmOrder] = useState<Order | null>(null);
+  const [deletingOrder, setDeletingOrder] = useState(false);
 
   useEffect(() => {
     fetchInitialData();
@@ -153,6 +172,67 @@ export default function OrdersPage() {
       setErrorMsg(err.message);
     }
   }
+
+  const handleOpenEditOrder = (order: Order) => {
+    setEditOrder(order);
+    setEditDeliveryAddress((order as any).deliveryAddress || "");
+    setEditDeliveryDate(
+      order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate).toISOString().split("T")[0] : ""
+    );
+    setEditNotes((order as any).notes || "");
+  };
+
+  const handleUpdateOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editOrder) return;
+    setUpdatingOrder(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`/api/orders/${editOrder.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deliveryAddress: editDeliveryAddress || null,
+          expectedDeliveryDate: editDeliveryDate || null,
+          notes: editNotes || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update order");
+
+      setSuccessMsg(`Order "${editOrder.orderNumber}" updated successfully.`);
+      setEditOrder(null);
+      fetchInitialData();
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setUpdatingOrder(false);
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!deleteConfirmOrder) return;
+    setDeletingOrder(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`/api/orders/${deleteConfirmOrder.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete order");
+
+      setSuccessMsg(data.message || `Order "${deleteConfirmOrder.orderNumber}" deleted successfully.`);
+      setDeleteConfirmOrder(null);
+      if (detailOrder?.id === deleteConfirmOrder.id) {
+        setDetailOrder(null);
+      }
+      fetchInitialData();
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setDeletingOrder(false);
+    }
+  };
 
   const filteredOrders = orders.filter((o) => {
     const matchSearch =
@@ -310,32 +390,65 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                {o.resultingSale ? (
-                  <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>
-                      Linked Sale: {o.resultingSale.saleNumber}
-                      {o.resultingSale.invoiceNumber ? ` (${o.resultingSale.invoiceNumber})` : " (Draft)"}
-                    </span>
-                  </span>
-                ) : (
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => handleConvertOrderToSale(o)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-700 hover:bg-brand-600 active:bg-brand-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+                    onClick={() => setDetailOrder(o)}
+                    className="px-2.5 py-1.5 text-xs text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold flex items-center gap-1 transition-colors"
+                    title="View full order details"
                   >
-                    <span>Create Sale</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <Eye className="w-3.5 h-3.5" />
+                    Details
                   </button>
-                )}
 
-                <span className="text-xs text-slate-400">
-                  {new Date(o.orderDate).toLocaleDateString("en-IN", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </span>
+                  {!o.resultingSale && (
+                    <>
+                      <button
+                        onClick={() => handleOpenEditOrder(o)}
+                        className="px-2.5 py-1.5 text-xs text-brand-700 hover:text-brand-900 bg-brand-50 hover:bg-brand-100 rounded-lg font-semibold flex items-center gap-1 transition-colors"
+                        title="Edit order"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirmOrder(o)}
+                        className="px-2 py-1.5 text-xs text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg font-semibold flex items-center gap-1 transition-colors"
+                        title="Delete order"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {o.resultingSale ? (
+                    <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>
+                        Linked Sale: {o.resultingSale.saleNumber}
+                        {o.resultingSale.invoiceNumber ? ` (${o.resultingSale.invoiceNumber})` : " (Draft)"}
+                      </span>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleConvertOrderToSale(o)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-700 hover:bg-brand-600 active:bg-brand-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+                    >
+                      <span>Create Sale</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  <span className="text-xs text-slate-400">
+                    {new Date(o.orderDate).toLocaleDateString("en-IN", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </span>
+                </div>
               </div>
             </div>
           ))
@@ -526,6 +639,308 @@ export default function OrdersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ORDER DETAIL MODAL */}
+      {detailOrder && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-xl my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-brand-50 text-brand-800 rounded-xl">
+                  <ShoppingCart className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                    <span>Order: {detailOrder.orderNumber}</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        detailOrder.status === "COMPLETED"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : detailOrder.status === "CONFIRMED"
+                          ? "bg-blue-100 text-blue-800"
+                          : "bg-amber-100 text-amber-800"
+                      }`}
+                    >
+                      {detailOrder.status}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Booked on: {new Date(detailOrder.orderDate).toLocaleDateString("en-IN", { dateStyle: "long" })}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setDetailOrder(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Customer Details */}
+            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl text-xs border border-slate-100">
+              <div>
+                <span className="text-slate-400 block font-semibold">Customer</span>
+                <span className="font-bold text-slate-900 text-sm">{detailOrder.customer?.name}</span>
+                <span className="text-slate-600 block mt-0.5">{detailOrder.customer?.phone}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block font-semibold">Exp. Delivery Date</span>
+                <span className="font-semibold text-slate-800">
+                  {detailOrder.expectedDeliveryDate
+                    ? new Date(detailOrder.expectedDeliveryDate).toLocaleDateString("en-IN", { dateStyle: "medium" })
+                    : "Not specified"}
+                </span>
+                {(detailOrder as any).deliveryAddress && (
+                  <span className="text-slate-500 block mt-0.5 truncate" title={(detailOrder as any).deliveryAddress}>
+                    Address: {(detailOrder as any).deliveryAddress}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Items Table */}
+            <div>
+              <span className="text-xs font-bold text-slate-700 block mb-2">Order Line Items:</span>
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold">
+                    <tr>
+                      <th className="p-2.5">Product / Item</th>
+                      <th className="p-2.5 text-center">Qty</th>
+                      <th className="p-2.5 text-right">Unit Price</th>
+                      <th className="p-2.5 text-right">Tax</th>
+                      <th className="p-2.5 text-right">Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {detailOrder.items?.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50/50">
+                        <td className="p-2.5">
+                          <span className="font-bold text-slate-900 block">{item.product?.name}</span>
+                          <span className="text-[10px] font-mono text-slate-400">{item.product?.sku}</span>
+                        </td>
+                        <td className="p-2.5 text-center font-bold text-slate-800">
+                          {item.quantity} {item.product?.unit || "pcs"}
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-slate-700">
+                          ₹{Number(item.unitPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-slate-500">{item.taxRate}%</td>
+                        <td className="p-2.5 text-right font-mono font-bold text-slate-900">
+                          ₹{Number(item.lineTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Financial Summary */}
+            <div className="bg-slate-50 p-3.5 rounded-xl space-y-1.5 text-xs border border-slate-100">
+              <div className="flex justify-between text-slate-600">
+                <span>Subtotal:</span>
+                <span className="font-mono">₹{Number(detailOrder.subtotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              {Number(detailOrder.discount) > 0 && (
+                <div className="flex justify-between text-emerald-700 font-semibold">
+                  <span>Discount:</span>
+                  <span className="font-mono">-₹{Number(detailOrder.discount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-slate-600">
+                <span>GST Tax:</span>
+                <span className="font-mono">₹{Number(detailOrder.tax).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              {Number(detailOrder.deliveryCharges) > 0 && (
+                <div className="flex justify-between text-slate-600">
+                  <span>Delivery Charges:</span>
+                  <span className="font-mono">₹{Number(detailOrder.deliveryCharges).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm font-bold text-slate-900 pt-2 border-t border-slate-200">
+                <span>Grand Total:</span>
+                <span className="font-mono text-brand-900">
+                  ₹{Number(detailOrder.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            {/* Linked Sale */}
+            {detailOrder.resultingSale && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-900">
+                <span className="font-semibold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                  Converted to Sale: {detailOrder.resultingSale.saleNumber}
+                  {detailOrder.resultingSale.invoiceNumber ? ` (${detailOrder.resultingSale.invoiceNumber})` : " (Draft)"}
+                </span>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-3 border-t">
+              <div className="flex items-center gap-2">
+                {!detailOrder.resultingSale && (
+                  <>
+                    <button
+                      onClick={() => {
+                        const o = detailOrder;
+                        setDetailOrder(null);
+                        handleConvertOrderToSale(o);
+                      }}
+                      className="px-3.5 py-1.5 bg-brand-700 hover:bg-brand-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+                    >
+                      <ArrowRight className="w-3.5 h-3.5" />
+                      Create Sale
+                    </button>
+                    <button
+                      onClick={() => {
+                        const o = detailOrder;
+                        setDetailOrder(null);
+                        handleOpenEditOrder(o);
+                      }}
+                      className="px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Edit Order
+                    </button>
+                    <button
+                      onClick={() => {
+                        const o = detailOrder;
+                        setDetailOrder(null);
+                        setDeleteConfirmOrder(o);
+                      }}
+                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete
+                    </button>
+                  </>
+                )}
+              </div>
+              <button
+                onClick={() => setDetailOrder(null)}
+                className="px-4 py-1.5 bg-slate-900 text-white rounded-xl font-semibold text-xs"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT ORDER MODAL */}
+      {editOrder && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-brand-50 text-brand-800 rounded-xl">
+                  <Edit2 className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-bold text-slate-900 text-base">Edit Order: {editOrder.orderNumber}</h2>
+                  <p className="text-xs text-slate-500">Customer: {editOrder.customer?.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setEditOrder(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateOrder} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Expected Delivery Date</label>
+                <input
+                  type="date"
+                  value={editDeliveryDate}
+                  onChange={(e) => setEditDeliveryDate(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Delivery Address</label>
+                <textarea
+                  rows={2}
+                  value={editDeliveryAddress}
+                  onChange={(e) => setEditDeliveryAddress(e.target.value)}
+                  placeholder="Street, locality, landmark..."
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Internal Notes</label>
+                <textarea
+                  rows={2}
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="Special client requirements, instructions..."
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditOrder(null)}
+                  className="px-4 py-2 border rounded-xl font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingOrder}
+                  className="px-5 py-2 bg-brand-800 hover:bg-brand-900 text-white rounded-xl font-bold shadow disabled:opacity-50"
+                >
+                  {updatingOrder ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE ORDER MODAL */}
+      {deleteConfirmOrder && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center gap-3">
+              <span className="p-3 bg-rose-50 text-rose-600 rounded-2xl">
+                <Trash2 className="w-6 h-6" />
+              </span>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Delete Order?</h3>
+                <p className="text-xs text-slate-500">
+                  {deleteConfirmOrder.orderNumber} ({deleteConfirmOrder.customer?.name})
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-rose-50/50 border border-rose-100 p-3 rounded-xl">
+              Are you sure you want to delete this order? This action cannot be undone and will be logged in the audit trail.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmOrder(null)}
+                disabled={deletingOrder}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteOrder}
+                disabled={deletingOrder}
+                className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow disabled:opacity-50"
+              >
+                {deletingOrder ? "Deleting..." : "Confirm Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}

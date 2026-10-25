@@ -437,3 +437,120 @@ export async function convertQuotationToSale(user: SessionUser, quotationId: str
     return sale;
   });
 }
+
+export async function updateQuotation(
+  user: SessionUser,
+  id: string,
+  data: {
+    validUntil?: string | null;
+    notes?: string | null;
+    deliveryCharges?: number;
+    items?: Array<{ productId: string; quantity: number; unitPrice: number; discount: number; taxRate: number }>;
+  }
+) {
+  const canEdit = await hasPermission(user, ModuleName.QUOTATIONS, ActionName.EDIT);
+  if (!canEdit) throw new Error("FORBIDDEN: You do not have permission to edit quotations.");
+
+  const existing = await prisma.quotation.findUnique({
+    where: { id },
+    include: { resultingSale: true, items: true },
+  });
+
+  if (!existing) throw new Error("Quotation not found");
+  if (existing.status === QuotationStatus.CONVERTED || existing.resultingSale) {
+    throw new Error("Cannot edit quotation: It has already been converted to a Sale.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    let totals: any = null;
+    if (data.items && data.items.length > 0) {
+      totals = calculateOrderTotals(data.items, data.deliveryCharges ?? Number(existing.deliveryCharges));
+      await tx.quotationItem.deleteMany({ where: { quotationId: id } });
+
+      const products = await tx.product.findMany({ where: { id: { in: data.items.map((i) => i.productId) } } });
+      const productMap = new Map(products.map((p) => [p.id, p]));
+
+      await tx.quotationItem.createMany({
+        data: totals.calculatedItems.map((item: any) => {
+          const prod = productMap.get(item.productId);
+          return {
+            quotationId: id,
+            productId: item.productId,
+            productName: prod?.name || null,
+            sku: prod?.sku || null,
+            unit: prod?.unit || "pcs",
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discount: item.discount,
+            taxRate: item.taxRate,
+            lineTotal: item.lineTotal,
+          };
+        }),
+      });
+    }
+
+    const updated = await tx.quotation.update({
+      where: { id },
+      data: {
+        ...(data.validUntil !== undefined && {
+          validUntil: data.validUntil ? new Date(data.validUntil) : null,
+        }),
+        ...(data.notes !== undefined && { notes: data.notes }),
+        ...(totals && {
+          subtotal: totals.subtotal,
+          discount: totals.discount,
+          tax: totals.tax,
+          deliveryCharges: totals.deliveryCharges,
+          grandTotal: totals.grandTotal,
+        }),
+      },
+      include: {
+        customer: true,
+        items: { include: { product: true } },
+      },
+    });
+
+    await logAuditEvent({
+      userId: user.id,
+      action: "UPDATE_QUOTATION",
+      entityType: "QUOTATION",
+      entityId: id,
+      previousState: existing,
+      newState: updated,
+    });
+
+    return updated;
+  });
+}
+
+export async function deleteQuotation(user: SessionUser, id: string) {
+  const canDelete = await hasPermission(user, ModuleName.QUOTATIONS, ActionName.DELETE);
+  if (!canDelete) throw new Error("FORBIDDEN: You do not have permission to delete quotations.");
+
+  const existing = await prisma.quotation.findUnique({
+    where: { id },
+    include: { resultingSale: true, items: true },
+  });
+
+  if (!existing) throw new Error("Quotation not found");
+  if (existing.status === QuotationStatus.CONVERTED || existing.resultingSale) {
+    throw new Error("Cannot delete quotation: It has already been converted to a Sale.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await tx.quotationItem.deleteMany({ where: { quotationId: id } });
+    await tx.quotation.delete({ where: { id } });
+
+    await logAuditEvent({
+      userId: user.id,
+      action: "DELETE_QUOTATION",
+      entityType: "QUOTATION",
+      entityId: id,
+      previousState: existing,
+      newState: null,
+    });
+
+    return { success: true, message: `Quotation ${existing.quotationNumber} deleted successfully.` };
+  });
+}
+

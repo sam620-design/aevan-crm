@@ -65,6 +65,8 @@ export async function PATCH(
         scheduledDate: parsed.data.scheduledDate ? new Date(parsed.data.scheduledDate) : existing.scheduledDate,
         timeSlot: parsed.data.timeSlot !== undefined ? parsed.data.timeSlot : existing.timeSlot,
         estimatedPrice: parsed.data.estimatedPrice !== undefined ? parsed.data.estimatedPrice : existing.estimatedPrice,
+        category: parsed.data.category || existing.category,
+        assignedStaffId: parsed.data.assignedStaffId !== undefined ? (parsed.data.assignedStaffId || null) : existing.assignedStaffId,
       },
       include: {
         customer: true,
@@ -92,3 +94,44 @@ export async function PATCH(
     return NextResponse.json({ error: error.message || "Failed to update service" }, { status });
   }
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getSession();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const existing = await getCleaningServiceById(user, params.id);
+
+    await prisma.cleaningService.delete({
+      where: { id: params.id },
+    });
+
+    await logAuditEvent({
+      userId: user.id,
+      action: "DELETE_SERVICE",
+      entityType: "CleaningService",
+      entityId: params.id,
+      previousState: { serviceNumber: existing.serviceNumber, status: existing.status },
+      newState: null,
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Job ${existing.serviceNumber} deleted successfully.`,
+    });
+  } catch (error: any) {
+    console.error("Service DELETE error:", error);
+    const status = error.message?.includes("UNAUTHORIZED")
+      ? 401
+      : error.message?.includes("FORBIDDEN")
+      ? 403
+      : 500;
+    return NextResponse.json({ error: error.message || "Failed to delete service" }, { status });
+  }
+}
+

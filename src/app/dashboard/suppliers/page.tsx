@@ -18,6 +18,8 @@ import {
   X,
   Edit2,
   Trash2,
+  Eye,
+  MessageCircle,
 } from "lucide-react";
 
 interface Supplier {
@@ -52,6 +54,7 @@ export default function SuppliersPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Modal State
+  const [detailSupplier, setDetailSupplier] = useState<Supplier | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -349,6 +352,13 @@ export default function SuppliersPage() {
 
                 <div className="flex items-center gap-1">
                   <button
+                    onClick={() => setDetailSupplier(s)}
+                    className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors"
+                    title="View supplier details"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => handleOpenEdit(s)}
                     className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors"
                     title="Edit supplier"
@@ -568,6 +578,137 @@ export default function SuppliersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* SUPPLIER DETAIL MODAL */}
+      {detailSupplier && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-200 my-8">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <Truck className="w-5 h-5 text-brand-700" />
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">{detailSupplier.name}</h3>
+                  <p className="text-xs font-mono text-slate-500 font-bold">{detailSupplier.code}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDetailSupplier(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <div>
+                  <span className="text-slate-400 block font-semibold">Business Name</span>
+                  <span className="font-bold text-slate-800">{detailSupplier.businessName || "N/A"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block font-semibold">Contact Person</span>
+                  <span className="font-bold text-slate-800">{detailSupplier.contactPerson || "N/A"}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span className="font-semibold text-slate-800">{detailSupplier.phone}</span>
+                </div>
+                {detailSupplier.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="text-slate-700">{detailSupplier.email}</span>
+                  </div>
+                )}
+                {detailSupplier.address && (
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                    <span className="text-slate-700">
+                      {[detailSupplier.address, detailSupplier.city, detailSupplier.state, detailSupplier.pincode]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="p-2 border border-slate-100 rounded-xl bg-white shadow-xs">
+                  <span className="text-slate-400 block font-semibold">Category</span>
+                  <span className="font-bold text-slate-800 capitalize">
+                    {detailSupplier.category.replace("_", " ").toLowerCase()}
+                  </span>
+                </div>
+                <div className="p-2 border border-slate-100 rounded-xl bg-white shadow-xs">
+                  <span className="text-slate-400 block font-semibold">Credit Period</span>
+                  <span className="font-bold text-slate-800">{detailSupplier.creditPeriodDays} Days</span>
+                </div>
+                <div className="p-2 border border-slate-100 rounded-xl bg-white shadow-xs">
+                  <span className="text-slate-400 block font-semibold">GSTIN</span>
+                  <span className="font-mono font-bold text-slate-800">{detailSupplier.gstin || "N/A"}</span>
+                </div>
+              </div>
+
+              {detailSupplier.notes && (
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-slate-500 font-semibold block mb-0.5">Notes:</span>
+                  <p className="text-slate-700 italic">{detailSupplier.notes}</p>
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`tel:${detailSupplier.phone}`}
+                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold rounded-lg flex items-center gap-1 transition-colors text-xs"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    Call
+                  </a>
+                  <a
+                    href={`https://wa.me/${detailSupplier.phone.replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold rounded-lg flex items-center gap-1 transition-colors text-xs"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    WhatsApp
+                  </a>
+                  <Link
+                    href={`/dashboard/supplier-ledger?supplierId=${detailSupplier.id}`}
+                    className="px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-800 font-semibold rounded-lg flex items-center gap-1 transition-colors text-xs"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    Ledger
+                  </Link>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const s = detailSupplier;
+                      setDetailSupplier(null);
+                      handleOpenEdit(s);
+                    }}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded-lg flex items-center gap-1 transition-colors text-xs"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => setDetailSupplier(null)}
+                    className="px-4 py-1.5 bg-slate-900 text-white font-semibold rounded-lg text-xs"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

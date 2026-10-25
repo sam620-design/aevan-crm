@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getCustomerById, updateCustomer } from "@/lib/services/customer.service";
+import { getCustomerById, updateCustomer, deleteCustomer } from "@/lib/services/customer.service";
 import { updateCustomerSchema } from "@/lib/validations/customer.schema";
 
 export async function GET(
@@ -49,3 +49,23 @@ export async function PUT(
     );
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const result = await deleteCustomer(user, params.id);
+    return NextResponse.json(result);
+  } catch (error: any) {
+    const isForbidden = error.message?.startsWith("FORBIDDEN");
+    return NextResponse.json(
+      { error: error.message || "Failed to delete customer" },
+      { status: isForbidden ? 403 : 500 }
+    );
+  }
+}
+

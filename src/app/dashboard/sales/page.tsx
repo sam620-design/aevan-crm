@@ -15,6 +15,8 @@ import {
   UserPlus,
   Phone,
   Check,
+  Trash2,
+  Eye,
 } from "lucide-react";
 
 interface Customer {
@@ -94,6 +96,9 @@ export default function SalesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [activeInvoice, setActiveInvoice] = useState<InvoiceDoc | null>(null);
+  const [selectedDetailSale, setSelectedDetailSale] = useState<Sale | null>(null);
+  const [deleteConfirmSale, setDeleteConfirmSale] = useState<Sale | null>(null);
+  const [deletingSale, setDeletingSale] = useState(false);
 
   // Direct sale form
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
@@ -285,6 +290,27 @@ export default function SalesPage() {
     }
   }
 
+  async function handleDeleteSale() {
+    if (!deleteConfirmSale) return;
+    setDeletingSale(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`/api/sales/${deleteConfirmSale.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete sale");
+      setSuccessMsg(data.message || `Draft sale ${deleteConfirmSale.saleNumber} deleted successfully`);
+      if (selectedDetailSale?.id === deleteConfirmSale.id) {
+        setSelectedDetailSale(null);
+      }
+      setDeleteConfirmSale(null);
+      fetchInitialData();
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setDeletingSale(false);
+    }
+  }
+
   const filteredSales = sales.filter((s) => {
     const matchSearch =
       s.saleNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -459,15 +485,32 @@ export default function SalesPage() {
                   })}
                 </span>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setSelectedDetailSale(s)}
+                    className="p-1.5 text-slate-500 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                    title="View Sale Details"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+
                   {!s.isFinalized ? (
-                    <button
-                      onClick={() => handleFinalizeSale(s)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
-                    >
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>Finalize & Issue Invoice</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleFinalizeSale(s)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+                      >
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>Finalize</span>
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirmSale(s)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete Draft Sale"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
                   ) : (
                     <button
                       onClick={() => handleViewInvoice(s.id)}
@@ -1126,6 +1169,239 @@ export default function SalesPage() {
                 <p className="font-semibold text-slate-500">Terms & Conditions:</p>
                 <p>{activeInvoice.termsAndConditions}</p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SALE DETAIL VIEW MODAL */}
+      {selectedDetailSale && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-5 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-bold text-slate-900 text-base">
+                    {selectedDetailSale.invoiceNumber || selectedDetailSale.saleNumber}
+                  </h2>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      selectedDetailSale.isFinalized
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {selectedDetailSale.isFinalized ? "FINALIZED" : "DRAFT SALE"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  {selectedDetailSale.linkedOrder
+                    ? `Converted from Order ${selectedDetailSale.linkedOrder.orderNumber}`
+                    : "Commercial Direct Sale"}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedDetailSale(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Customer Details */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Customer</p>
+                <p className="font-bold text-slate-800 text-sm mt-0.5">
+                  {selectedDetailSale.customerName || selectedDetailSale.customer?.name}
+                </p>
+                <p className="text-slate-600">{selectedDetailSale.customer?.phone}</p>
+                {selectedDetailSale.customer?.gstin && (
+                  <p className="font-mono text-slate-700">GST: {selectedDetailSale.customer.gstin}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Sale Information</p>
+                <p className="text-slate-700 mt-0.5">
+                  Date:{" "}
+                  {new Date(selectedDetailSale.saleDate).toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </p>
+                {selectedDetailSale.customer?.billingAddress && (
+                  <p className="text-slate-500 text-[11px] mt-1 truncate">
+                    Address: {selectedDetailSale.customer.billingAddress}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Items Table */}
+            <div>
+              <h3 className="font-bold text-xs text-slate-800 mb-2">Line Items</h3>
+              <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase">
+                    <tr>
+                      <th className="p-2.5">Product</th>
+                      <th className="p-2.5 text-center">Qty</th>
+                      <th className="p-2.5 text-right">Price</th>
+                      <th className="p-2.5 text-right">Discount</th>
+                      <th className="p-2.5 text-right">GST%</th>
+                      <th className="p-2.5 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {selectedDetailSale.items?.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        <td className="p-2.5">
+                          <p className="font-semibold text-slate-800">
+                            {item.productName || item.product?.name}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-mono">
+                            {item.sku || item.product?.sku}
+                          </p>
+                        </td>
+                        <td className="p-2.5 text-center font-medium">{item.quantity}</td>
+                        <td className="p-2.5 text-right">₹{Number(item.unitPrice).toLocaleString("en-IN")}</td>
+                        <td className="p-2.5 text-right">₹{Number(item.discount).toLocaleString("en-IN")}</td>
+                        <td className="p-2.5 text-right">{item.taxRate}%</td>
+                        <td className="p-2.5 text-right font-bold text-slate-900">
+                          ₹{Number(item.lineTotal).toLocaleString("en-IN")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Financial Summary */}
+            <div className="flex justify-end pt-2 border-t">
+              <div className="w-64 space-y-1 text-right text-xs">
+                <div className="flex justify-between text-slate-500">
+                  <span>Subtotal:</span>
+                  <span>₹{Number(selectedDetailSale.subtotal).toLocaleString("en-IN")}</span>
+                </div>
+                {Number(selectedDetailSale.discount) > 0 && (
+                  <div className="flex justify-between text-emerald-600">
+                    <span>Discount:</span>
+                    <span>-₹{Number(selectedDetailSale.discount).toLocaleString("en-IN")}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-slate-500">
+                  <span>GST Tax:</span>
+                  <span>₹{Number(selectedDetailSale.tax).toLocaleString("en-IN")}</span>
+                </div>
+                {Number(selectedDetailSale.deliveryCharges) > 0 && (
+                  <div className="flex justify-between text-slate-500">
+                    <span>Delivery:</span>
+                    <span>₹{Number(selectedDetailSale.deliveryCharges).toLocaleString("en-IN")}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-black text-brand-900 pt-1.5 border-t">
+                  <span>Grand Total:</span>
+                  <span>₹{Number(selectedDetailSale.grandTotal).toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-3 border-t">
+              <div>
+                {!selectedDetailSale.isFinalized && (
+                  <button
+                    onClick={() => {
+                      const s = selectedDetailSale;
+                      setSelectedDetailSale(null);
+                      setDeleteConfirmSale(s);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-red-600 hover:bg-red-50 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete Draft</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedDetailSale(null)}
+                  className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50"
+                >
+                  Close
+                </button>
+
+                {selectedDetailSale.isFinalized ? (
+                  <button
+                    onClick={() => {
+                      const id = selectedDetailSale.id;
+                      setSelectedDetailSale(null);
+                      handleViewInvoice(id);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-700 hover:bg-brand-600 text-white rounded-xl text-xs font-semibold shadow transition-colors"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Print Tax Invoice</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const s = selectedDetailSale;
+                      setSelectedDetailSale(null);
+                      handleFinalizeSale(s);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-semibold shadow transition-colors"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>Finalize & Issue Invoice</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION DIALOG */}
+      {deleteConfirmSale && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-xl">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-red-100 rounded-xl text-red-600">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Delete Draft Sale</h3>
+                <p className="text-xs text-slate-500">{deleteConfirmSale.saleNumber}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Are you sure you want to permanently delete draft sale{" "}
+              <strong className="text-slate-900">{deleteConfirmSale.saleNumber}</strong> for{" "}
+              <strong>{deleteConfirmSale.customerName || deleteConfirmSale.customer?.name}</strong>?
+              This action cannot be undone.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmSale(null)}
+                className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingSale}
+                onClick={handleDeleteSale}
+                className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow transition-colors disabled:opacity-50"
+              >
+                {deletingSale ? "Deleting..." : "Delete Draft"}
+              </button>
             </div>
           </div>
         </div>

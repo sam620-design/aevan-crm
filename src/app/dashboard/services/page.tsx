@@ -22,6 +22,9 @@ import {
   Tag,
   ChevronRight,
   ShieldCheck,
+  Edit2,
+  Trash2,
+  MessageCircle,
 } from "lucide-react";
 
 interface CleaningServiceItem {
@@ -94,6 +97,28 @@ export default function ServicesPage() {
   const [finalPrice, setFinalPrice] = useState<number | "">("");
   const [completionNotes, setCompletionNotes] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
+
+  // Edit Modal State
+  const [editModalService, setEditModalService] = useState<CleaningServiceItem | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    customerName: "",
+    customerPhone: "",
+    customerEmail: "",
+    serviceAddress: "",
+    propertyType: "Residential",
+    propertySize: "",
+    category: "DEEP_CLEANING",
+    requirements: "",
+    scheduledDate: "",
+    timeSlot: "10:00 AM - 01:00 PM",
+    assignedStaffId: "",
+    estimatedPrice: 0,
+  });
+
+  // Delete State
+  const [deleteConfirmService, setDeleteConfirmService] = useState<CleaningServiceItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchServices();
@@ -280,6 +305,82 @@ export default function ServicesPage() {
       setError(err.message);
     } finally {
       setTransitioning(false);
+    }
+  };
+
+  const handleOpenEdit = (job: CleaningServiceItem) => {
+    setEditModalService(job);
+    setEditFormData({
+      customerName: job.customerName || "",
+      customerPhone: (job.customerPhone || "").replace("+91", ""),
+      customerEmail: job.customerEmail || "",
+      serviceAddress: job.serviceAddress || "",
+      propertyType: job.propertyType || "Residential",
+      propertySize: job.propertySize || "",
+      category: job.category || "DEEP_CLEANING",
+      requirements: job.requirements || "",
+      scheduledDate: job.scheduledDate ? new Date(job.scheduledDate).toISOString().split("T")[0] : "",
+      timeSlot: job.timeSlot || "10:00 AM - 01:00 PM",
+      assignedStaffId: job.assignedStaffId || "",
+      estimatedPrice: job.estimatedPrice || 0,
+    });
+  };
+
+  const handleUpdateService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editModalService) return;
+    setEditing(true);
+    setError(null);
+    try {
+      const payload = {
+        ...editFormData,
+        customerPhone: editFormData.customerPhone.startsWith("+91")
+          ? editFormData.customerPhone
+          : `+91${editFormData.customerPhone.replace(/\D/g, "")}`,
+        estimatedPrice: Number(editFormData.estimatedPrice) || 0,
+      };
+
+      const res = await fetch(`/api/services/${editModalService.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update service");
+      }
+
+      setEditModalService(null);
+      fetchServices();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setEditing(false);
+    }
+  };
+
+  const handleDeleteService = async () => {
+    if (!deleteConfirmService) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/services/${deleteConfirmService.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete service");
+      }
+      setDeleteConfirmService(null);
+      if (actionModal?.service.id === deleteConfirmService.id) {
+        setActionModal(null);
+      }
+      fetchServices();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -488,16 +589,36 @@ export default function ServicesPage() {
 
                 {/* Card Action Controls */}
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => {
-                      setSelectedService(job);
-                      setActionModal({ type: "VIEW", service: job });
-                    }}
-                    className="text-xs text-slate-600 hover:text-slate-900 font-semibold flex items-center gap-1"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    Details
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setSelectedService(job);
+                        setActionModal({ type: "VIEW", service: job });
+                      }}
+                      className="px-2.5 py-1.5 text-xs text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold flex items-center gap-1"
+                      title="View full job details"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Details
+                    </button>
+                    <button
+                      onClick={() => handleOpenEdit(job)}
+                      className="px-2.5 py-1.5 text-xs text-brand-700 hover:text-brand-900 bg-brand-50 hover:bg-brand-100 rounded-lg font-semibold flex items-center gap-1"
+                      title="Edit job details"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Edit
+                    </button>
+                    {(currentUser?.role === "SUPERADMIN" || currentUser?.role === "ADMIN") && (
+                      <button
+                        onClick={() => setDeleteConfirmService(job)}
+                        className="px-2 py-1.5 text-xs text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg font-semibold flex items-center gap-1"
+                        title="Delete cleaning job"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
 
                   <div className="flex items-center gap-1.5">
                     {job.status === "SCHEDULED" && (
@@ -869,13 +990,57 @@ export default function ServicesPage() {
                     </div>
                   )}
 
-                  <div className="pt-3 border-t border-slate-100 flex justify-end">
-                    <button
-                      onClick={() => setActionModal(null)}
-                      className="px-4 py-2 bg-slate-900 text-white font-semibold rounded-xl"
-                    >
-                      Close
-                    </button>
+                  <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`tel:${actionModal.service.customerPhone}`}
+                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        Call
+                      </a>
+                      <a
+                        href={`https://wa.me/${actionModal.service.customerPhone.replace(/\D/g, "")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        WhatsApp
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const s = actionModal.service;
+                          setActionModal(null);
+                          handleOpenEdit(s);
+                        }}
+                        className="px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-800 text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        Edit Job
+                      </button>
+                      {(currentUser?.role === "SUPERADMIN" || currentUser?.role === "ADMIN") && (
+                        <button
+                          onClick={() => {
+                            const s = actionModal.service;
+                            setActionModal(null);
+                            setDeleteConfirmService(s);
+                          }}
+                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Delete
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setActionModal(null)}
+                        className="px-4 py-1.5 bg-slate-900 text-white font-semibold rounded-lg text-xs"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -962,6 +1127,255 @@ export default function ServicesPage() {
                   </div>
                 </form>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* EDIT SERVICE MODAL */}
+        {/* ------------------------------------------------------------- */}
+        {editModalService && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-xl max-h-[90vh] flex flex-col my-8">
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="p-2 bg-brand-50 text-brand-800 rounded-lg">
+                    <Edit2 className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">
+                      Edit Cleaning Job: {editModalService.serviceNumber}
+                    </h3>
+                    <p className="text-xs text-slate-500">Update schedule, location, assignment, or requirements.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setEditModalService(null)}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateService} className="p-5 space-y-4 overflow-y-auto flex-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Customer Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editFormData.customerName}
+                      onChange={(e) => setEditFormData({ ...editFormData, customerName: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Contact Phone *
+                    </label>
+                    <div className="flex">
+                      <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-slate-200 bg-slate-100 text-slate-600 text-xs font-bold">
+                        +91
+                      </span>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        value={editFormData.customerPhone}
+                        onChange={(e) =>
+                          setEditFormData({ ...editFormData, customerPhone: e.target.value.replace(/\D/g, "") })
+                        }
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-r-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Service Address *
+                  </label>
+                  <textarea
+                    required
+                    rows={2}
+                    value={editFormData.serviceAddress}
+                    onChange={(e) => setEditFormData({ ...editFormData, serviceAddress: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Category</label>
+                    <select
+                      value={editFormData.category}
+                      onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                    >
+                      <option value="DEEP_CLEANING">Deep Cleaning</option>
+                      <option value="OFFICE_CLEANING">Office Cleaning</option>
+                      <option value="SOFA_CLEANING">Sofa Cleaning</option>
+                      <option value="CARPET_CLEANING">Carpet Cleaning</option>
+                      <option value="TANK_CLEANING">Tank Cleaning</option>
+                      <option value="SANITIZATION">Sanitization</option>
+                      <option value="FACILITY_MANAGEMENT">Facility Management</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Property Type</label>
+                    <select
+                      value={editFormData.propertyType}
+                      onChange={(e) => setEditFormData({ ...editFormData, propertyType: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                    >
+                      <option value="Residential">Residential</option>
+                      <option value="Commercial">Commercial</option>
+                      <option value="Apartment / Flat">Apartment / Flat</option>
+                      <option value="Villa / House">Villa / House</option>
+                      <option value="Office">Office</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Size / BHK</label>
+                    <input
+                      type="text"
+                      value={editFormData.propertySize}
+                      onChange={(e) => setEditFormData({ ...editFormData, propertySize: e.target.value })}
+                      placeholder="e.g. 3 BHK"
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Scheduled Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={editFormData.scheduledDate}
+                      onChange={(e) => setEditFormData({ ...editFormData, scheduledDate: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Time Slot</label>
+                    <select
+                      value={editFormData.timeSlot}
+                      onChange={(e) => setEditFormData({ ...editFormData, timeSlot: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                    >
+                      <option value="08:00 AM - 11:00 AM">08:00 AM - 11:00 AM</option>
+                      <option value="10:00 AM - 01:00 PM">10:00 AM - 01:00 PM</option>
+                      <option value="02:00 PM - 05:00 PM">02:00 PM - 05:00 PM</option>
+                      <option value="04:00 PM - 07:00 PM">04:00 PM - 07:00 PM</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Assign Staff</label>
+                    <select
+                      value={editFormData.assignedStaffId}
+                      onChange={(e) => setEditFormData({ ...editFormData, assignedStaffId: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                    >
+                      <option value="">-- Unassigned --</option>
+                      {staffList.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.email})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Estimated Price (₹)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editFormData.estimatedPrice}
+                      onChange={(e) =>
+                        setEditFormData({ ...editFormData, estimatedPrice: Number(e.target.value) })
+                      }
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Requirements / Notes</label>
+                  <textarea
+                    rows={2}
+                    value={editFormData.requirements}
+                    onChange={(e) => setEditFormData({ ...editFormData, requirements: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditModalService(null)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editing}
+                    className="px-5 py-2 text-xs font-semibold bg-brand-800 hover:bg-brand-900 text-white rounded-xl shadow-sm transition-colors disabled:opacity-50"
+                  >
+                    {editing ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* DELETE CONFIRMATION DIALOG */}
+        {/* ------------------------------------------------------------- */}
+        {deleteConfirmService && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="p-3 bg-rose-50 text-rose-600 rounded-xl">
+                  <Trash2 className="w-6 h-6" />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Delete Cleaning Job?</h3>
+                  <p className="text-xs text-slate-500">
+                    Job: <strong>{deleteConfirmService.serviceNumber}</strong> ({deleteConfirmService.customerName})
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 bg-rose-50/50 border border-rose-100 p-3 rounded-xl">
+                Are you sure you want to permanently delete this cleaning service job? This action cannot be undone and will be logged in the system audit trail.
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmService(null)}
+                  disabled={deleting}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteService}
+                  disabled={deleting}
+                  className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition-colors disabled:opacity-50"
+                >
+                  {deleting ? "Deleting..." : "Yes, Delete Job"}
+                </button>
+              </div>
             </div>
           </div>
         )}

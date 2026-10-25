@@ -517,3 +517,48 @@ export async function getInvoiceDocument(user: SessionUser, saleId: string) {
     termsAndConditions: config?.termsAndConditions || "Payment due within 15 days of invoice date.",
   };
 }
+
+export async function deleteSale(user: SessionUser, saleId: string) {
+  const canDelete = await hasPermission(user, ModuleName.SALES, ActionName.DELETE);
+  if (!canDelete) throw new Error("FORBIDDEN: You do not have permission to delete sales.");
+
+  const sale = await prisma.sale.findUnique({
+    where: { id: saleId },
+    include: { items: true },
+  });
+
+  if (!sale) throw new Error("Sale record not found");
+  if (sale.isFinalized) {
+    throw new Error("Cannot delete a finalized Sale. Finalized invoices are legally immutable.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    if (sale.orderId) {
+      await tx.order.update({
+        where: { id: sale.orderId },
+        data: { status: "CONFIRMED" },
+      });
+    }
+    if (sale.quotationId) {
+      await tx.quotation.update({
+        where: { id: sale.quotationId },
+        data: { status: "ACCEPTED", convertedSaleId: null },
+      });
+    }
+
+    await tx.saleItem.deleteMany({ where: { saleId } });
+    await tx.sale.delete({ where: { id: saleId } });
+
+    await logAuditEvent({
+      userId: user.id,
+      action: "DELETE_DRAFT_SALE",
+      entityType: "SALE",
+      entityId: saleId,
+      previousState: sale,
+      newState: null,
+    });
+
+    return { success: true, message: `Draft Sale ${sale.saleNumber} deleted successfully.` };
+  });
+}
+

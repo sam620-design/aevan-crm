@@ -376,3 +376,35 @@ export async function updateOrder(
     return updated;
   });
 }
+
+export async function deleteOrder(user: SessionUser, id: string) {
+  const canDelete = await hasPermission(user, ModuleName.ORDERS, ActionName.DELETE);
+  if (!canDelete) throw new Error("FORBIDDEN: You do not have permission to delete orders.");
+
+  const existing = await prisma.order.findUnique({
+    where: { id },
+    include: { resultingSale: true, items: true },
+  });
+
+  if (!existing) throw new Error("Order not found");
+  if (existing.resultingSale) {
+    throw new Error("Cannot delete order: A Sale has already been converted from this Order.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await tx.orderItem.deleteMany({ where: { orderId: id } });
+    await tx.order.delete({ where: { id } });
+
+    await logAuditEvent({
+      userId: user.id,
+      action: "DELETE_ORDER",
+      entityType: "ORDER",
+      entityId: id,
+      previousState: existing,
+      newState: null,
+    });
+
+    return { success: true, message: `Order ${existing.orderNumber} deleted successfully.` };
+  });
+}
+

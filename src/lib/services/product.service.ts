@@ -189,3 +189,87 @@ export async function updateProduct(user: SessionUser, id: string, data: any) {
 
   return updated;
 }
+
+export async function getProductById(user: SessionUser, id: string) {
+  const canView = await hasPermission(user, ModuleName.INVENTORY, ActionName.VIEW);
+  if (!canView) throw new Error("FORBIDDEN: You do not have permission to view products.");
+
+  const canViewMargins =
+    isSuperadmin(user) ||
+    (await hasPermission(user, ModuleName.REPORTS, ActionName.VIEW_PROFIT_MARGINS));
+
+  const product = await prisma.product.findUnique({
+    where: { id },
+    include: {
+      stockBalances: {
+        include: {
+          location: { select: { id: true, name: true, code: true } },
+        },
+      },
+    },
+  });
+
+  if (!product) throw new Error("Product not found.");
+
+  const totalPhysicalStock = product.stockBalances.reduce((sum, b) => sum + b.quantity, 0);
+
+  return {
+    ...product,
+    totalPhysicalStock,
+    costPrice: canViewMargins ? product.costPrice : null,
+  };
+}
+
+export async function deleteProduct(user: SessionUser, id: string) {
+  const canDelete = await hasPermission(user, ModuleName.INVENTORY, ActionName.DELETE);
+  if (!canDelete) throw new Error("FORBIDDEN: You do not have permission to delete products.");
+
+  const existing = await prisma.product.findUnique({
+    where: { id },
+    include: {
+      orderItems: { take: 1 },
+      saleItems: { take: 1 },
+      poItems: { take: 1 },
+    },
+  });
+
+  if (!existing) throw new Error("Product not found.");
+
+  const hasHistory =
+    (existing.orderItems?.length > 0) ||
+    (existing.saleItems?.length > 0) ||
+    (existing.poItems?.length > 0);
+
+  if (hasHistory) {
+    const updated = await prisma.product.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    await logAuditEvent({
+      userId: user.id,
+      action: "DEACTIVATE_PRODUCT",
+      entityType: "PRODUCT",
+      entityId: id,
+      previousState: existing,
+      newState: updated,
+    });
+
+    return { success: true, message: "Product has transaction history; deactivated successfully." };
+  } else {
+    await prisma.stockBalance.deleteMany({ where: { productId: id } });
+    await prisma.product.delete({ where: { id } });
+
+    await logAuditEvent({
+      userId: user.id,
+      action: "DELETE_PRODUCT",
+      entityType: "PRODUCT",
+      entityId: id,
+      previousState: existing,
+      newState: null,
+    });
+
+    return { success: true, message: "Product deleted successfully." };
+  }
+}
+
