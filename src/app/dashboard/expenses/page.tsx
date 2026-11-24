@@ -588,7 +588,8 @@ export default function ExpensesPage() {
             return (
               <div
                 key={exp.id}
-                className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-300 transition-all flex flex-col justify-between space-y-3"
+                onClick={() => setSelectedExpense(exp)}
+                className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-400 hover:shadow-md cursor-pointer transition-all flex flex-col justify-between space-y-3"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">
@@ -644,7 +645,7 @@ export default function ExpensesPage() {
                   </div>
                 </div>
 
-                <div className="border-t border-slate-100 pt-2.5 flex items-center justify-between text-xs">
+                <div className="border-t border-slate-100 pt-2.5 flex items-center justify-between text-xs" onClick={(e) => e.stopPropagation()}>
                   <span className="text-[10px] text-slate-400">By {exp.createdBy?.name || "Staff"}</span>
 
                   <div className="flex items-center gap-1">

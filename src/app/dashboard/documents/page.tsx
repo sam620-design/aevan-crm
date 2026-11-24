@@ -8,6 +8,7 @@ import {
   FileText,
   Download,
   Eye,
+  Edit2,
   Trash2,
   X,
   AlertCircle,
@@ -51,6 +52,59 @@ export default function DocumentsPage() {
 
   // Detail Modal
   const [detailDoc, setDetailDoc] = useState<DocumentItem | null>(null);
+
+  // Edit Modal State
+  const [editDoc, setEditDoc] = useState<DocumentItem | null>(null);
+  const [editFileName, setEditFileName] = useState("");
+  const [editDocType, setEditDocType] = useState("GST_CERTIFICATE");
+  const [editEntityType, setEditEntityType] = useState("GENERAL");
+  const [editFileUrl, setEditFileUrl] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [updatingDoc, setUpdatingDoc] = useState(false);
+
+  function openEditDoc(doc: DocumentItem) {
+    setEditDoc(doc);
+    setEditFileName(doc.fileName || "");
+    setEditDocType(doc.documentType || "GST_CERTIFICATE");
+    setEditEntityType(doc.entityType || "GENERAL");
+    setEditFileUrl(doc.fileUrl || "");
+    setEditNotes(doc.notes || "");
+  }
+
+  async function handleUpdateDocument(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editDoc) return;
+    if (!editFileName.trim() || !editFileUrl.trim()) {
+      alert("File Name and File URL are required.");
+      return;
+    }
+    setUpdatingDoc(true);
+    try {
+      const res = await fetch(`/api/documents/${editDoc.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: editFileName.trim(),
+          documentType: editDocType,
+          entityType: editEntityType,
+          fileUrl: editFileUrl.trim(),
+          notes: editNotes.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccessMsg(`Document "${editFileName}" updated successfully.`);
+        setEditDoc(null);
+        fetchDocuments();
+      } else {
+        setErrorMsg(data.error || "Failed to update document");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Network error");
+    } finally {
+      setUpdatingDoc(false);
+    }
+  }
 
   // Delete Confirm
   const [deleteConfirmDoc, setDeleteConfirmDoc] = useState<DocumentItem | null>(null);
@@ -258,7 +312,8 @@ export default function DocumentsPage() {
           filtered.map((doc) => (
             <div
               key={doc.id}
-              className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              onClick={() => setDetailDoc(doc)}
+              className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-brand-400 hover:shadow-md cursor-pointer transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
             >
               <div className="flex items-center gap-3.5">
                 <div className="p-3 bg-brand-50 text-brand-800 rounded-2xl shrink-0">
@@ -468,17 +523,30 @@ export default function DocumentsPage() {
             </div>
 
             <div className="flex items-center justify-between pt-3 border-t">
-              <button
-                onClick={() => {
-                  const d = detailDoc;
-                  setDetailDoc(null);
-                  setDeleteConfirmDoc(d);
-                }}
-                className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold flex items-center gap-1.5 text-xs transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const d = detailDoc;
+                    setDetailDoc(null);
+                    openEditDoc(d);
+                  }}
+                  className="px-3.5 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-800 rounded-xl font-bold flex items-center gap-1.5 text-xs transition-colors"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Edit
+                </button>
+                <button
+                  onClick={() => {
+                    const d = detailDoc;
+                    setDetailDoc(null);
+                    setDeleteConfirmDoc(d);
+                  }}
+                  className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold flex items-center gap-1.5 text-xs transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </button>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => alert(`Downloading ${detailDoc.fileName}...`)}

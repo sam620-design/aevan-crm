@@ -526,7 +526,11 @@ export default function ServicesPage() {
             {services.map((job) => (
               <div
                 key={job.id}
-                className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between hover:border-slate-300 transition-all"
+                onClick={() => {
+                  setSelectedService(job);
+                  setActionModal({ type: "VIEW", service: job });
+                }}
+                className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between hover:border-brand-400 hover:shadow-md cursor-pointer transition-all"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
@@ -588,7 +592,7 @@ export default function ServicesPage() {
                 </div>
 
                 {/* Card Action Controls */}
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => {

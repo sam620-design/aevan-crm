@@ -285,7 +285,8 @@ export default function SuppliersPage() {
           {suppliers.map((s) => (
             <div
               key={s.id}
-              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-300 transition-all flex flex-col justify-between"
+              onClick={() => setDetailSupplier(s)}
+              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-brand-400 hover:shadow-md cursor-pointer transition-all flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-start justify-between gap-2 mb-3">
@@ -341,7 +342,7 @@ export default function SuppliersPage() {
                 </div>
               </div>
 
-              <div className="border-t border-slate-100 pt-3 flex items-center justify-between gap-2">
+              <div className="border-t border-slate-100 pt-3 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
                 <Link
                   href={`/dashboard/supplier-ledger?supplierId=${s.id}`}
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-900 bg-brand-50 px-2.5 py-1.5 rounded-lg border border-brand-200 transition-colors"

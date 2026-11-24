@@ -481,7 +481,8 @@ export default function InventoryPage() {
             return (
               <div
                 key={item.id}
-                className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 transition-all space-y-3"
+                onClick={() => setDetailProduct(item)}
+                className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-brand-400 hover:shadow-md cursor-pointer transition-all space-y-3"
               >
                 {/* Header row */}
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
@@ -578,7 +579,7 @@ export default function InventoryPage() {
                 )}
 
                 {/* Actions Bar */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
                   <span className="text-[10px] text-slate-400">
                     Tax: {item.taxRate}% | Min Alert: {item.minStockAlert}
                   </span>

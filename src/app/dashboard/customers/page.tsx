@@ -308,7 +308,8 @@ export default function CustomersPage() {
           filtered.map((c) => (
             <div
               key={c.id}
-              className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 transition-all space-y-3"
+              onClick={() => setDetailCustomer(c)}
+              className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-brand-400 hover:shadow-md cursor-pointer transition-all space-y-3"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -355,7 +356,7 @@ export default function CustomersPage() {
               )}
 
               {/* Quick Contact & Action Buttons */}
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setDetailCustomer(c)}

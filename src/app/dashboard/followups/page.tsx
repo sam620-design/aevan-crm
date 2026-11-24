@@ -377,7 +377,8 @@ export default function FollowUpsPage() {
           filtered.map((t) => (
             <div
               key={t.id}
-              className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 transition-all space-y-3"
+              onClick={() => setDetailFollowup(t)}
+              className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-brand-400 hover:shadow-md cursor-pointer transition-all space-y-3"
             >
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                 <div className="flex items-center gap-3">
@@ -450,7 +451,7 @@ export default function FollowUpsPage() {
               )}
 
               {/* Action Controls */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setDetailFollowup(t)}

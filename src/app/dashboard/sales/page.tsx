@@ -429,7 +429,8 @@ export default function SalesPage() {
           filteredSales.map((s) => (
             <div
               key={s.id}
-              className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:border-slate-300 transition-all space-y-3"
+              onClick={() => setSelectedDetailSale(s)}
+              className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:border-brand-400 hover:shadow-md cursor-pointer transition-all space-y-3"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -730,7 +731,7 @@ export default function SalesPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-1 border-t border-brand-100">
+                    <div className="flex items-center justify-between pt-1 border-t border-brand-100" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={() => setIsCreatingCustomer(false)}
