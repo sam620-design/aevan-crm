@@ -563,11 +563,11 @@ export default function SalesPage() {
                     className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg transition-all border shadow-sm ${
                       isCreatingCustomer
                         ? "bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200"
-                        : "bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100 hover:border-brand-300"
+                        : "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
                     }`}
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>{isCreatingCustomer ? "Select Existing" : "+ New Customer"}</span>
+                    <span>{isCreatingCustomer ? "Select Existing Customer" : "+ Add New Customer"}</span>
                   </button>
                 </div>
 

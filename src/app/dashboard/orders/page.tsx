@@ -23,6 +23,8 @@ interface Customer {
   name: string;
   phone: string;
   customerCode: string;
+  billingAddress?: string | null;
+  gstin?: string | null;
 }
 
 interface Product {
@@ -82,6 +84,65 @@ export default function OrdersPage() {
   // Detail Modal State
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
 
+  // Inline New Customer Registration State
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
+  const [newCustName, setNewCustName] = useState("");
+  const [newCustContactPerson, setNewCustContactPerson] = useState("");
+  const [newCustPhone, setNewCustPhone] = useState("");
+  const [newCustType, setNewCustType] = useState("WHOLESALE");
+  const [newCustGstin, setNewCustGstin] = useState("");
+  const [newCustAddress, setNewCustAddress] = useState("");
+  const [savingCustomer, setSavingCustomer] = useState(false);
+
+  async function handleQuickCreateCustomer(): Promise<string | null> {
+    if (!newCustName.trim()) {
+      setErrorMsg("Please enter Customer / Company Name.");
+      return null;
+    }
+    const digits = newCustPhone.replace(/\D/g, "");
+    if (digits.length !== 10) {
+      setErrorMsg("Contact phone number must be exactly 10 digits.");
+      return null;
+    }
+
+    setSavingCustomer(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newCustName.trim(),
+          contactPerson: newCustContactPerson.trim() || null,
+          phone: `+91${digits}`,
+          customerType: newCustType,
+          billingAddress: newCustAddress.trim() || null,
+          shippingAddress: newCustAddress.trim() || null,
+          gstin: newCustGstin.trim() ? newCustGstin.trim().toUpperCase() : null,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to register new customer");
+      }
+
+      const created: Customer = data.customer;
+      setCustomers((prev) => [created, ...prev]);
+      setSelectedCustomerId(created.id);
+      if (newCustAddress.trim() && !deliveryAddress) {
+        setDeliveryAddress(newCustAddress.trim());
+      }
+      setIsCreatingCustomer(false);
+      return created.id;
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to create customer");
+      return null;
+    } finally {
+      setSavingCustomer(false);
+    }
+  }
+
   // Edit Modal State
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [editDeliveryAddress, setEditDeliveryAddress] = useState("");
@@ -122,6 +183,18 @@ export default function OrdersPage() {
     setErrorMsg(null);
     setSuccessMsg(null);
 
+    let targetCustomerId = selectedCustomerId;
+    if (isCreatingCustomer) {
+      const createdId = await handleQuickCreateCustomer();
+      if (!createdId) return;
+      targetCustomerId = createdId;
+    }
+
+    if (!targetCustomerId) {
+      setErrorMsg("Please select an existing customer or enter new customer details.");
+      return;
+    }
+
     const validItems = formItems.filter((i) => i.productId && i.quantity > 0);
     if (validItems.length === 0) {
       setErrorMsg("Please add at least one product with valid quantity.");
@@ -133,7 +206,7 @@ export default function OrdersPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customerId: selectedCustomerId,
+          customerId: targetCustomerId,
           deliveryAddress: deliveryAddress || null,
           expectedDeliveryDate: deliveryDate || null,
           deliveryCharges: Number(deliveryCharges) || 0,
@@ -284,7 +357,15 @@ export default function OrdersPage() {
         </div>
 
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => {
+            setIsCreatingCustomer(false);
+            setNewCustName("");
+            setNewCustPhone("");
+            setNewCustContactPerson("");
+            setNewCustAddress("");
+            setNewCustGstin("");
+            setShowCreateModal(true);
+          }}
           className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-700 hover:bg-brand-600 active:bg-brand-800 text-white rounded-xl text-xs font-semibold shadow transition-colors"
         >
           <Plus className="w-4 h-4" />
@@ -472,19 +553,164 @@ export default function OrdersPage() {
 
             <form onSubmit={handleCreateOrder} className="space-y-3 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Select Customer</label>
-                <select
-                  value={selectedCustomerId}
-                  onChange={(e) => setSelectedCustomerId(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl"
-                  required
-                >
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.phone})
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-bold text-slate-800 text-xs">
+                    Customer / Client <span className="text-rose-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingCustomer(!isCreatingCustomer);
+                      setErrorMsg(null);
+                    }}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg transition-all border shadow-sm ${
+                      isCreatingCustomer
+                        ? "bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200"
+                        : "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                    }`}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{isCreatingCustomer ? "Select Existing Customer" : "+ Add New Customer"}</span>
+                  </button>
+                </div>
+
+                {isCreatingCustomer ? (
+                  <div className="p-3.5 bg-gradient-to-b from-emerald-50/70 to-slate-50 border border-emerald-200 rounded-2xl space-y-3 shadow-inner">
+                    <div className="flex items-center justify-between border-b border-emerald-100 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-6 h-6 rounded-full bg-emerald-700 text-white flex items-center justify-center text-xs font-bold">
+                          +
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-xs">New Customer Registration</h4>
+                          <p className="text-[10px] text-slate-500">
+                            Saved to customer master &amp; automatically linked to this order
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          Customer / Company Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required={isCreatingCustomer}
+                          placeholder="e.g. Hotel Maurya, Apollo Clinic"
+                          value={newCustName}
+                          onChange={(e) => setNewCustName(e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          Mobile / Phone (10 digits) <span className="text-red-500">*</span>
+                        </label>
+                        <div className="flex">
+                          <span className="inline-flex items-center px-2.5 py-1.5 bg-slate-100 border border-r-0 border-slate-200 rounded-l-xl text-xs text-slate-600 font-mono">
+                            +91
+                          </span>
+                          <input
+                            type="tel"
+                            required={isCreatingCustomer}
+                            maxLength={10}
+                            placeholder="9876543210"
+                            value={newCustPhone}
+                            onChange={(e) => setNewCustPhone(e.target.value.replace(/\D/g, ""))}
+                            className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-r-xl font-mono focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          Contact Person (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Manager Name"
+                          value={newCustContactPerson}
+                          onChange={(e) => setNewCustContactPerson(e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          Customer Type
+                        </label>
+                        <select
+                          value={newCustType}
+                          onChange={(e) => setNewCustType(e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                        >
+                          <option value="WHOLESALE">Wholesale</option>
+                          <option value="RETAIL">Retail</option>
+                          <option value="DISTRIBUTOR">Distributor</option>
+                          <option value="CORPORATE">Corporate</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          Billing Address (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Premises / Street / City"
+                          value={newCustAddress}
+                          onChange={(e) => {
+                            setNewCustAddress(e.target.value);
+                            if (!deliveryAddress) setDeliveryAddress(e.target.value);
+                          }}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          GSTIN (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={15}
+                          placeholder="e.g. 10ABCDE1234F1Z5"
+                          value={newCustGstin}
+                          onChange={(e) => setNewCustGstin(e.target.value.toUpperCase())}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-xl uppercase font-mono focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedCustomerId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setSelectedCustomerId(id);
+                      const c = customers.find((cust) => cust.id === id);
+                      if (c && c.billingAddress && !deliveryAddress) {
+                        setDeliveryAddress(c.billingAddress);
+                      }
+                    }}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-brand-700 focus:outline-none"
+                    required={!isCreatingCustomer}
+                  >
+                    <option value="">-- Choose Existing Customer --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.phone})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2">
