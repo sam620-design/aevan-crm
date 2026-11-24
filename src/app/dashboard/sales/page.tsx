@@ -3,7 +3,13 @@
 import { useState, useEffect } from "react";
 import {
   Receipt,
+  Clock,
   Search,
+  LayoutGrid,
+  LayoutList,
+  TrendingUp,
+  CreditCard,
+  Building2,
   Plus,
   Printer,
   CheckCircle2,
@@ -61,6 +67,8 @@ interface Sale {
   tax: number;
   deliveryCharges: number;
   grandTotal: number;
+  paidAmount?: number | null;
+  balanceAmount?: number | null;
   isFinalized: boolean;
   finalizedAt?: string | null;
   linkedOrder?: { id: string; orderNumber: string } | null;
@@ -89,6 +97,7 @@ export default function SalesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterFinalized, setFilterFinalized] = useState("ALL");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -391,32 +400,253 @@ export default function SalesPage() {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <div className="sm:col-span-3 relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by Invoice (INV-...), Sale ref (SAL-...), or customer name..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600 shadow-sm"
-          />
+      {/* Executive KPI Metrics Ribbon */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Total Billed Revenue</span>
+            <span className="text-2xl font-bold tracking-tight text-slate-900 mt-1 block font-mono">
+              ₹{sales.reduce((sum, s) => sum + (Number(s.grandTotal) || 0), 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </span>
+            <span className="text-[10px] text-slate-500 font-medium">{sales.length} total sales records</span>
+          </div>
+          <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl">
+            <TrendingUp className="w-5 h-5" />
+          </div>
         </div>
 
-        <select
-          value={filterFinalized}
-          onChange={(e) => setFilterFinalized(e.target.value)}
-          className="px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-brand-600 shadow-sm"
-        >
-          <option value="ALL">All Sales</option>
-          <option value="FINALIZED">Finalized (Invoice Issued)</option>
-          <option value="DRAFT">Draft / Unfinalized</option>
-        </select>
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Tax Invoices Issued</span>
+            <span className="text-2xl font-bold tracking-tight text-brand-900 mt-1 block">
+              {sales.filter((s) => s.isFinalized).length}
+            </span>
+            <span className="text-[10px] text-slate-500 font-medium">Locked GST invoices</span>
+          </div>
+          <div className="p-3 bg-brand-50 text-brand-700 rounded-xl">
+            <Receipt className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Pending Collections</span>
+            <span className="text-2xl font-bold tracking-tight text-rose-600 mt-1 block font-mono">
+              ₹{sales.reduce((sum, s) => sum + (Number(s.balanceAmount !== undefined ? s.balanceAmount : s.grandTotal) || 0), 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </span>
+            <span className="text-[10px] text-slate-500 font-medium">Unpaid customer balance</span>
+          </div>
+          <div className="p-3 bg-rose-50 text-rose-700 rounded-xl">
+            <CreditCard className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Draft Orders / Sales</span>
+            <span className="text-2xl font-bold tracking-tight text-slate-900 mt-1 block">
+              {sales.filter((s) => !s.isFinalized).length}
+            </span>
+            <span className="text-[10px] text-slate-500 font-medium">Awaiting finalization</span>
+          </div>
+          <div className="p-3 bg-amber-50 text-amber-700 rounded-xl">
+            <FileText className="w-5 h-5" />
+          </div>
+        </div>
       </div>
 
-      {/* Sales List */}
+      {/* Filter & View Mode Controls */}
       <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by invoice number (INV-...), sale code (SAL-...), or client name..."
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-brand-600 shadow-xs"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={filterFinalized}
+              onChange={(e) => setFilterFinalized(e.target.value)}
+              className="px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-brand-600 shadow-xs text-slate-700"
+            >
+              <option value="ALL">All Sales ({sales.length})</option>
+              <option value="FINALIZED">Finalized Invoices ({sales.filter(s => s.isFinalized).length})</option>
+              <option value="DRAFT">Draft / Unfinalized ({sales.filter(s => !s.isFinalized).length})</option>
+            </select>
+
+            <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl shrink-0 shadow-xs">
+              <button
+                onClick={() => setViewMode("table")}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  viewMode === "table" ? "bg-slate-900 text-white shadow-xs" : "text-slate-500 hover:text-slate-800"
+                }`}
+                title="Table View"
+              >
+                <LayoutList className="w-3.5 h-3.5" />
+                <span>Table</span>
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  viewMode === "grid" ? "bg-slate-900 text-white shadow-xs" : "text-slate-500 hover:text-slate-800"
+                }`}
+                title="Grid View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Cards</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Presentation: High Density Table or Grid */}
+      {viewMode === "table" ? (
+        <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+          {loading ? (
+            <div className="p-12 text-center text-xs text-slate-400">Loading sales records...</div>
+          ) : filteredSales.length === 0 ? (
+            <div className="p-12 text-center text-xs text-slate-500">
+              No sales records match your filters. Convert an order or click &quot;New Direct Sale&quot;.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">Invoice / Sale Ref</th>
+                    <th className="py-3 px-4">Client / Customer</th>
+                    <th className="py-3 px-4">Billing Date</th>
+                    <th className="py-3 px-4 text-right">Items & Subtotal</th>
+                    <th className="py-3 px-4 text-right">Grand Total</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredSales.map((s) => (
+                    <tr
+                      key={s.id}
+                      onClick={() => setSelectedDetailSale(s)}
+                      className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                    >
+                      <td className="py-3.5 px-4">
+                        <div className="space-y-0.5">
+                          {s.invoiceNumber ? (
+                            <span className="font-mono text-xs font-bold text-brand-900 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded inline-block">
+                              {s.invoiceNumber}
+                            </span>
+                          ) : (
+                            <span className="font-mono text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded inline-block">
+                              {s.saleNumber}
+                            </span>
+                          )}
+                          {s.linkedOrder && (
+                            <span className="text-[10px] text-slate-400 block font-mono">
+                              From: {s.linkedOrder.orderNumber}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div>
+                          <span className="font-bold text-slate-900 group-hover:text-brand-800 transition-colors block">
+                            {s.customer.name}
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-mono">
+                            {s.customer.phone}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="text-slate-600 block">
+                          {new Date(s.saleDate).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <div>
+                          <span className="font-semibold text-slate-700 block">
+                            {s.items?.length || 0} product line{s.items?.length === 1 ? "" : "s"}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-mono">
+                            Subtotal: ₹{Number(s.subtotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <span className="font-bold font-mono text-sm text-slate-900">
+                          ₹{Number(s.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        {s.isFinalized ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            Finalized
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-amber-600" />
+                            Draft Sale
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => handleViewInvoice(s.id)}
+                            className="p-1.5 text-slate-500 hover:text-brand-800 hover:bg-brand-50 rounded-lg transition-colors"
+                            title="Print Tax Invoice"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setSelectedDetailSale(s)}
+                            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                            title="View Details"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          {!s.isFinalized && (
+                            <button
+                              onClick={() => handleFinalizeSale(s)}
+                              className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                              title="Finalize Invoice"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {!s.isFinalized && (
+                            <button
+                              onClick={() => setDeleteConfirmSale(s)}
+                              className="p-1.5 text-slate-400 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Delete Draft"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Sales Cards Grid */
+        <div className="space-y-3">
         {loading ? (
           <div className="p-8 text-center text-xs text-slate-500 bg-white border border-slate-200 rounded-2xl">
             Loading sales records...
@@ -526,7 +756,8 @@ export default function SalesPage() {
             </div>
           ))
         )}
-      </div>
+        </div>
+      )}
 
       {/* CREATE DIRECT SALE MODAL */}
       {showCreateModal && (

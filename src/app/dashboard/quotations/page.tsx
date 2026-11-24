@@ -4,6 +4,11 @@ import { useState, useEffect } from "react";
 import {
   FileText,
   Search,
+  LayoutGrid,
+  LayoutList,
+  TrendingUp,
+  CreditCard,
+  Clock,
   Plus,
   ArrowRight,
   Printer,
@@ -64,6 +69,7 @@ export default function QuotationsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 

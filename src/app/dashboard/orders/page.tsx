@@ -4,6 +4,11 @@ import { useState, useEffect } from "react";
 import {
   ShoppingCart,
   Search,
+  LayoutGrid,
+  LayoutList,
+  TrendingUp,
+  CreditCard,
+  Clock,
   Plus,
   ArrowRight,
   CheckCircle2,
@@ -67,6 +72,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
